@@ -22,6 +22,25 @@ BLUE = "#4f7cff"
 SERIES_COLORS = [CYAN, PURPLE, AMBER, GREEN, RED, BLUE, "#d178ff", "#7bdff2", "#c4f26b"]
 
 
+def apply_analysis_figure_layout(
+    fig: go.Figure, *, height: int = 310, legend_y: float = 1.12,
+    right_margin: int = 30,
+) -> go.Figure:
+    """Apply shared Screen B presentation without changing chart data."""
+    fig.update_layout(
+        title=None,
+        height=height,
+        margin={"l": 40, "r": right_margin, "t": 82, "b": 40},
+        showlegend=True,
+        legend={
+            "orientation": "h", "yanchor": "bottom", "y": legend_y,
+            "xanchor": "left", "x": 0, "font": {"size": 8},
+            "bgcolor": "rgba(0,0,0,0)",
+        },
+    )
+    return fig
+
+
 def _dt(value: Any) -> Any:
     try:
         return datetime.fromtimestamp(float(value), tz=timezone.utc)

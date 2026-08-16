@@ -16,12 +16,14 @@ from screen_core.components import (
 )
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
+from screen_core.figures import apply_analysis_figure_layout
 
 
 ROUTE = "/cvd-orderflow"
 LABEL = "CVD"
-CONTRACT_FILE = "cvd_volume_orderflow_screen.json"
+CONTRACT_FILE = "cvd_volume_orderflow_VR1_FINAL.json"
 HAS_ANALYSIS = True
+SCREEN_REVISION = "CVD_NATIVE_SCREEN_B_V4_RENDER_CLEAN"
 
 REFERENCE_IMAGES = [
     "CVD/02_CVD_A.png",
@@ -43,137 +45,63 @@ ANALYSIS_CONTENT_ID = "cvd-analysis-content"
 TREND_OPTIONS = [
     {"label": "EMA 9", "value": "ema_9"},
     {"label": "EMA 21", "value": "ema_21"},
-    {"label": "EMA 50", "value": "ema_50"},
     {"label": "SMA 20", "value": "sma_20"},
     {"label": "SMA 50", "value": "sma_50"},
-    {"label": "SMA 100", "value": "sma_100"},
-    {"label": "SMA 200", "value": "sma_200"},
     {"label": "WMA 20", "value": "wma_20"},
     {"label": "WMA 50", "value": "wma_50"},
 ]
 
-BAND_OPTIONS = [
-    {
-        "label": "Bollinger Bands (20, 2)",
-        "value": "bollinger_bands",
-    },
-    {
-        "label": "Canal de Regresión",
-        "value": "regression_channel",
-    },
-]
-
 DERIVED_OPTIONS = [
-    {
-        "label": "ADX / DI+ / DI- (14)",
-        "value": "adx",
-    },
-    {
-        "label": "Bollinger Band Width (20, 2)",
-        "value": "bollinger_band_width",
-    },
+    {"label": "CVD Slope / Acceleration", "value": "cvd_slope_acceleration"},
+    {"label": "Delta Z-Score", "value": "delta_zscore"},
+    {"label": "Buy/Sell Imbalance", "value": "buy_sell_imbalance"},
 ]
 
 MOMENTUM_OPTIONS = [
-    {
-        "label": "MACD (12, 26, 9)",
-        "value": "macd",
-    },
-    {
-        "label": "RSI (14)",
-        "value": "rsi",
-    },
-    {
-        "label": "TSI (25, 13)",
-        "value": "tsi",
-    },
-    {
-        "label": "Stochastic (14, 3, 3)",
-        "value": "stochastic",
-    },
-    {
-        "label": "Williams %R (14)",
-        "value": "williams_r",
-    },
-    {
-        "label": "CCI (20)",
-        "value": "cci",
-    },
+    {"label": "Price ↔ CVD Divergence", "value": "price_cvd_divergence"},
+    {"label": "Spot ↔ Futures CVD Divergence", "value": "spot_futures_divergence"},
 ]
 
 VOLATILITY_OPTIONS = [
-    {
-        "label": "ATR (14)",
-        "value": "atr",
-    },
-    {
-        "label": "Wasserstein Distance",
-        "value": "wasserstein_distance",
-    },
+    {"label": "Wasserstein Distance", "value": "wasserstein_distance"},
 ]
 
-DEFAULT_TREND = ["ema_9", "ema_21", "sma_50"]
-DEFAULT_BANDS = ["bollinger_bands"]
-DEFAULT_DERIVED: list[str] = []
-DEFAULT_MOMENTUM: list[str] = []
-DEFAULT_VOLATILITY: list[str] = []
+DEFAULT_TREND = ["ema_9", "ema_21", "sma_20", "sma_50", "wma_20", "wma_50"]
+DEFAULT_DERIVED = ["cvd_slope_acceleration", "delta_zscore", "buy_sell_imbalance"]
+DEFAULT_MOMENTUM = ["price_cvd_divergence", "spot_futures_divergence"]
+DEFAULT_VOLATILITY = ["wasserstein_distance"]
 
 ANALYSIS_ORDER = (
-    "macd",
-    "rsi",
-    "tsi",
-    "adx",
-    "stochastic",
-    "williams_r",
-    "cci",
-    "atr",
+    "cvd_slope_acceleration",
+    "delta_zscore",
+    "buy_sell_imbalance",
+    "price_cvd_divergence",
+    "spot_futures_divergence",
     "wasserstein_distance",
-    "bollinger_band_width",
 )
 
 INDICATOR_TITLES = {
-    "macd": "MACD (12, 26, 9)",
-    "rsi": "RSI (14)",
-    "tsi": "TSI (25, 13)",
-    "adx": "ADX / DI+ / DI- (14)",
-    "stochastic": "STOCHASTIC (14, 3, 3)",
-    "williams_r": "WILLIAMS %R (14)",
-    "cci": "CCI (20)",
-    "atr": "ATR (14)",
+    "cvd_slope_acceleration": "CVD SLOPE / ACCELERATION",
+    "delta_zscore": "DELTA Z-SCORE",
+    "buy_sell_imbalance": "BUY / SELL IMBALANCE",
+    "price_cvd_divergence": "PRICE ↔ CVD DIVERGENCE",
+    "spot_futures_divergence": "SPOT ↔ FUTURES CVD DIVERGENCE",
     "wasserstein_distance": "WASSERSTEIN DISTANCE",
-    "bollinger_band_width": "BOLLINGER BAND WIDTH (20, 2)",
 }
 
 TRACE_COLORS = {
+    "slope": "#2f80ff",
+    "acceleration": "#f2c94c",
+    "zscore": "#00c2ff",
+    "imbalance": "#00d4a8",
+    "divergence": "#a879ff",
     "ema_9": "#2f80ff",
     "ema_21": "#00c2ff",
-    "ema_50": "#9b51e0",
     "sma_20": "#00d4ff",
     "sma_50": "#f2c94c",
-    "sma_100": "#dc59d7",
-    "sma_200": "#ff334f",
     "wma_20": "#a879ff",
     "wma_50": "#ff8a3d",
-    "bollinger_upper": "#2d7dff",
-    "bollinger_middle": "#65a8ff",
-    "bollinger_lower": "#2d7dff",
-    "regression_upper": "#e6a93a",
-    "regression_middle": "#f4cf65",
-    "regression_lower": "#e6a93a",
-    "macd": "#0788e8",
-    "signal": "#ff5d00",
-    "rsi": "#b45bea",
-    "tsi": "#1ed1dd",
-    "adx": "#d3c2a8",
-    "di_plus": "#20d05c",
-    "di_minus": "#ff273b",
-    "k": "#008fff",
-    "d": "#ff6a00",
-    "williams_r": "#b64fe6",
-    "cci": "#14c8dc",
-    "atr": "#ff9f00",
     "wasserstein_distance": "#3c94ed",
-    "bollinger_band_width": "#17c8ce",
 }
 
 CVD_LOCAL_CSS = """
@@ -541,6 +469,80 @@ def _dt(value: Any) -> Any:
         return value
 
 
+def _numeric(value: Any) -> float | None:
+    try:
+        if isinstance(value, bool):
+            return None
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _event_anchor_timestamp(event: dict[str, Any]) -> Any:
+    display = _safe_dict(event.get("display"))
+    return (
+        event.get("event_timestamp_exact")
+        if event.get("event_timestamp_exact") is not None
+        else display.get("anchor_timestamp")
+        if display.get("anchor_timestamp") is not None
+        else event.get("timestamp")
+    )
+
+
+def _event_anchor_value(
+    event: dict[str, Any],
+    fallback: Any = None,
+) -> float | None:
+    display = _safe_dict(event.get("display"))
+    calculation = _safe_dict(event.get("calculation"))
+
+    for candidate in (
+        event.get("event_value_exact"),
+        event.get("event_price"),
+        display.get("anchor_value"),
+        display.get("anchor_price"),
+        calculation.get("event_value_exact"),
+        calculation.get("crossing_value"),
+        fallback,
+    ):
+        value = _numeric(candidate)
+        if value is not None:
+            return value
+
+    first = _numeric(calculation.get("first_value"))
+    second = _numeric(calculation.get("second_value"))
+    if first is not None and second is not None:
+        return (first + second) / 2.0
+
+    return None
+
+
+def _add_exact_event_arrow(
+    fig: go.Figure,
+    *,
+    x: Any,
+    y: float,
+    signal: str,
+    color: str,
+) -> None:
+    """Point the arrow tip exactly at the contractual event coordinate."""
+    fig.add_annotation(
+        x=_dt(x),
+        y=y,
+        text="",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1.0,
+        arrowwidth=1.55,
+        arrowcolor=color,
+        ax=0,
+        ay=18 if signal == "bullish" else -18,
+        xref="x",
+        yref="y",
+        opacity=0.98,
+    )
+
+
 def _cvd_stylesheet() -> html.Link:
     return html.Link(
         rel="stylesheet",
@@ -616,7 +618,7 @@ def _indicator_panel() -> html.Div:
                 },
                 children=[
                     dcc.Link(
-                        "ANÁLISIS TÉCNICO FUNDAMENTAL",
+                        "ANÁLISIS CVD · ORDER FLOW",
                         href=f"{ROUTE}/analysis",
                         className="cvd-analysis-button",
                         style={
@@ -660,9 +662,9 @@ def _indicator_panel() -> html.Div:
                 className="cvd-selector-heading",
             ),
             html.Div(
-                "Mismo conjunto técnico de Prices, "
-                "aplicado al OHLC de cada CVD. "
-                "Volumen y MFI se excluyen de esta sección.",
+                "Pantalla A conserva overlays sobre CVD. "
+                "Pantalla B usa analítica nativa de order flow "
+                "precomputada por Processing (fixture demo en este contrato).",
                 className="cvd-selector-note",
             ),
             _selector_group(
@@ -674,15 +676,7 @@ def _indicator_panel() -> html.Div:
                 ),
             ),
             _selector_group(
-                "BANDAS Y CANALES · SOBRE CVD",
-                _checklist(
-                    "cvd-band-selectors",
-                    BAND_OPTIONS,
-                    DEFAULT_BANDS,
-                ),
-            ),
-            _selector_group(
-                "ANÁLISIS DERIVADO · PANTALLA B",
+                "DINÁMICA DEL FLUJO · PANTALLA B",
                 _checklist(
                     "cvd-derived-selectors",
                     DERIVED_OPTIONS,
@@ -691,7 +685,7 @@ def _indicator_panel() -> html.Div:
                 analysis_only=True,
             ),
             _selector_group(
-                "MOMENTUM · PANTALLA B",
+                "DIVERGENCIAS · PANTALLA B",
                 _checklist(
                     "cvd-momentum-selectors",
                     MOMENTUM_OPTIONS,
@@ -700,7 +694,7 @@ def _indicator_panel() -> html.Div:
                 analysis_only=True,
             ),
             _selector_group(
-                "VOLATILIDAD · PANTALLA B",
+                "CAMBIO DE RÉGIMEN · PANTALLA B",
                 _checklist(
                     "cvd-volatility-selectors",
                     VOLATILITY_OPTIONS,
@@ -715,7 +709,6 @@ def _indicator_panel() -> html.Div:
 def _default_selection() -> dict[str, list[str]]:
     return {
         "trend": list(DEFAULT_TREND),
-        "bands": list(DEFAULT_BANDS),
         "derived_analysis": list(DEFAULT_DERIVED),
         "momentum": list(DEFAULT_MOMENTUM),
         "volatility": list(DEFAULT_VOLATILITY),
@@ -724,14 +717,12 @@ def _default_selection() -> dict[str, list[str]]:
 
 def _selection_payload(
     trend: list[str] | None,
-    bands: list[str] | None,
     derived: list[str] | None,
     momentum: list[str] | None,
     volatility: list[str] | None,
 ) -> dict[str, list[str]]:
     return {
         "trend": _unique(trend or []),
-        "bands": _unique(bands or []),
         "derived_analysis": _unique(derived or []),
         "momentum": _unique(momentum or []),
         "volatility": _unique(volatility or []),
@@ -870,8 +861,7 @@ def _add_main_cross_markers(
             technical_block.get("events")
         )
         if isinstance(event, dict)
-        and event.get("event_group")
-        in {"moving_average_cross", "channel_cross"}
+        and event.get("event_group") == "moving_average_cross"
     ]
 
     grouped: dict[tuple[int, str], list[dict[str, Any]]] = {}
@@ -887,15 +877,7 @@ def _add_main_cross_markers(
             calculation.get("second_series") or ""
         )
 
-        requirements: set[str] = set()
-
-        for series_id in (first, second):
-            if series_id.startswith("regression_channel."):
-                requirements.add("regression_channel")
-            elif series_id.startswith("bollinger_bands."):
-                requirements.add("bollinger_bands")
-            else:
-                requirements.add(series_id)
+        requirements = {first, second}
 
         if not requirements.issubset(selected):
             continue
@@ -916,51 +898,27 @@ def _add_main_cross_markers(
         if not point:
             continue
 
-        # Keep one marker per direction/candle to avoid clutter.
+        # Keep one marker per direction/candle to avoid clutter, but anchor
+        # the arrow tip at the exact interpolated cross coordinate from JSON.
         event = cluster[0]
 
-        high = point.get("high")
-        low = point.get("low")
-
-        if not isinstance(high, (int, float)) or not isinstance(low, (int, float)):
-            continue
-
-        candle_range = max(
-            abs(float(high) - float(low)),
-            1e-9,
-        )
-
         if signal == "bullish":
-            y = float(low) - candle_range * .45
-            symbol = "arrow-up"
             color = GREEN
         elif signal == "bearish":
-            y = float(high) + candle_range * .45
-            symbol = "arrow-down"
             color = RED
         else:
             continue
 
-        fig.add_trace(
-            go.Scatter(
-                x=[_dt(timestamp)],
-                y=[y],
-                mode="markers",
-                marker={
-                    "symbol": symbol,
-                    "size": 9,
-                    "color": color,
-                    "line": {
-                        "width": 1,
-                        "color": "#03101a",
-                    },
-                },
-                showlegend=False,
-                hovertemplate=(
-                    f"{event.get('event_id')}"
-                    "<extra></extra>"
-                ),
-            )
+        y = _event_anchor_value(event)
+        if y is None:
+            continue
+
+        _add_exact_event_arrow(
+            fig,
+            x=_event_anchor_timestamp(event),
+            y=y,
+            signal=signal,
+            color=color,
         )
 
 
@@ -1030,11 +988,8 @@ def _cvd_candlestick_figure(
     for indicator_id in (
         "ema_9",
         "ema_21",
-        "ema_50",
         "sma_20",
         "sma_50",
-        "sma_100",
-        "sma_200",
         "wma_20",
         "wma_50",
     ):
@@ -1067,74 +1022,6 @@ def _cvd_candlestick_figure(
                 ),
             )
         )
-
-    if "bollinger_bands" in selected:
-        block = _safe_dict(
-            overlays.get("bollinger_bands")
-        )
-        series = _safe_dict(block.get("series"))
-
-        for name, dash in (
-            ("upper", "dot"),
-            ("middle", "dash"),
-            ("lower", "dot"),
-        ):
-            values = _safe_list(series.get(name))
-            size = min(len(x), len(values))
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x[-size:],
-                    y=values[-size:],
-                    mode="lines",
-                    line={
-                        "color": TRACE_COLORS[
-                            f"bollinger_{name}"
-                        ],
-                        "width": 1,
-                        "dash": dash,
-                    },
-                    showlegend=False,
-                    hovertemplate=(
-                        f"BB {name.upper()}: "
-                        "%{y:,.2f}<extra></extra>"
-                    ),
-                )
-            )
-
-    if "regression_channel" in selected:
-        block = _safe_dict(
-            overlays.get("regression_channel")
-        )
-        series = _safe_dict(block.get("series"))
-
-        for name, dash in (
-            ("upper", "dot"),
-            ("middle", "dash"),
-            ("lower", "dot"),
-        ):
-            values = _safe_list(series.get(name))
-            size = min(len(x), len(values))
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x[-size:],
-                    y=values[-size:],
-                    mode="lines",
-                    line={
-                        "color": TRACE_COLORS[
-                            f"regression_{name}"
-                        ],
-                        "width": 1,
-                        "dash": dash,
-                    },
-                    showlegend=False,
-                    hovertemplate=(
-                        f"REG {name.upper()}: "
-                        "%{y:,.2f}<extra></extra>"
-                    ),
-                )
-            )
 
     _add_main_cross_markers(
         fig,
@@ -1409,26 +1296,6 @@ def _indicator_figure(
         current_x = timestamps[-size:]
         current_y = values[-size:]
 
-        if (
-            indicator_id == "macd"
-            and name == "histogram"
-        ):
-            fig.add_trace(
-                go.Bar(
-                    x=current_x,
-                    y=current_y,
-                    marker_color=[
-                        GREEN
-                        if isinstance(value, (int, float))
-                        and value >= 0
-                        else RED
-                        for value in current_y
-                    ],
-                    showlegend=False,
-                    opacity=.8,
-                )
-            )
-            continue
 
         color = TRACE_COLORS.get(
             name,
@@ -1483,86 +1350,10 @@ def _indicator_figure(
             line_width=1,
         )
 
-    # Contractual buy/sell arrows for MACD, Stochastic and ADX.
-    event_pairs = {
-        "macd": {
-            "macd_above_signal",
-            "macd_below_signal",
-        },
-        "stochastic": {
-            "k_above_d",
-            "k_below_d",
-        },
-        "adx": {
-            "di_plus_above_di_minus",
-            "di_plus_below_di_minus",
-        },
-    }
-
-    allowed = event_pairs.get(indicator_id, set())
-
-    if allowed:
-        for event in _safe_list(
-            technical.get("events")
-        ):
-            if not isinstance(event, dict):
-                continue
-
-            if event.get("event_id") not in allowed:
-                continue
-
-            calculation = _safe_dict(
-                event.get("calculation")
-            )
-            first_value = calculation.get("first_value")
-            second_value = calculation.get("second_value")
-
-            if not isinstance(first_value, (int, float)):
-                continue
-
-            if not isinstance(second_value, (int, float)):
-                continue
-
-            y = (
-                float(first_value)
-                + float(second_value)
-            ) / 2.0
-
-            signal = event.get("signal")
-
-            if signal == "bullish":
-                symbol = "arrow-up"
-                color = GREEN
-            elif signal == "bearish":
-                symbol = "arrow-down"
-                color = RED
-            else:
-                continue
-
-            fig.add_trace(
-                go.Scatter(
-                    x=[_dt(event.get("timestamp"))],
-                    y=[y],
-                    mode="markers",
-                    marker={
-                        "symbol": symbol,
-                        "size": 8,
-                        "color": color,
-                        "line": {
-                            "width": 1,
-                            "color": "#03101a",
-                        },
-                    },
-                    showlegend=False,
-                    hovertemplate=(
-                        f"{event.get('event_id')}"
-                        "<extra></extra>"
-                    ),
-                )
-            )
+    # Native CVD Screen-B panels are direct Processing outputs; no legacy oscillator arrows.
 
     fig.update_layout(
-        height=152,
+        height=310,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={
@@ -1590,19 +1381,12 @@ def _indicator_figure(
         gridcolor=GRID,
         zeroline=False,
     )
-    if indicator_id in {"rsi", "stochastic"}:
-        fig.update_yaxes(
-            gridcolor=GRID,
-            zeroline=False,
-            range=[0, 100],
-            ticksuffix="%",
-        )
-    elif indicator_id == "tsi":
+    if indicator_id == "buy_sell_imbalance":
         fig.update_yaxes(
             gridcolor=GRID,
             zeroline=True,
             zerolinecolor="rgba(91,151,194,.35)",
-            range=[-100, 100],
+            range=[-1, 1],
         )
     else:
         fig.update_yaxes(
@@ -1611,7 +1395,10 @@ def _indicator_figure(
             zerolinecolor="rgba(91,151,194,.35)",
         )
 
-    return fig
+    for trace in fig.data:
+        if trace.name and trace.type in {"scatter", "bar"}:
+            trace.showlegend = True
+    return apply_analysis_figure_layout(fig)
 
 
 def _selected_analysis_ids(
@@ -1677,10 +1464,9 @@ def _cvd_summary_panel(
     ]
 
     sections = (
-        ("trend", "TENDENCIA", "#20d05c"),
-        ("momentum", "MOMENTUM", "#a65cff"),
-        ("volatility", "VOLATILIDAD", "#ffab00"),
-        ("distribution", "DISTRIBUCIÓN", "#2ea8ff"),
+        ("flow", "DINÁMICA DEL FLUJO", "#20d05c"),
+        ("divergence", "DIVERGENCIAS", "#a65cff"),
+        ("regime", "CAMBIO DE RÉGIMEN", "#2ea8ff"),
     )
 
     for section_id, section_title, section_color in sections:
@@ -1811,10 +1597,6 @@ def build_analysis_screen(
                         )
                 ],
             ),
-                screen_header(
-                    contract,
-                    "ANÁLISIS TÉCNICO FUNDAMENTAL",
-                ),
                 empty,
             ]
         )
@@ -1852,8 +1634,8 @@ def build_analysis_screen(
                                 "responsive": True,
                             },
                             style={
-                                "height": "152px",
-                                "minHeight": "152px",
+                                "height": "310px",
+                                "minHeight": "310px",
                                 "width": "100%",
                             },
                         ),
@@ -1902,19 +1684,6 @@ def build_analysis_screen(
                             ],
                         )
                 ],
-            ),
-            screen_header(
-                contract,
-                "ANÁLISIS TÉCNICO FUNDAMENTAL",
-            ),
-            html.Div(
-                (
-                    "La misma selección se aplica a "
-                    "Spot y Futures. "
-                    "Volumen y MFI no forman parte "
-                    "de esta pantalla."
-                ),
-                className="contract-warning",
             ),
             html.Div(
                 className="cvd-analysis-layout",
@@ -2064,23 +1833,16 @@ def return_to_cvd_screen_a(clicks: int | None):
     Output("cvd-spot-delta", "figure"),
     Output("cvd-futures-delta", "figure"),
     Input("cvd-trend-selectors", "value"),
-    Input("cvd-band-selectors", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
     prevent_initial_call=True,
 )
 def update_cvd_candles(
     trend: list[str] | None,
-    bands: list[str] | None,
     timeframe: str | None,
     _reload_clicks: int | None,
 ):
-    selected = _unique(
-        [
-            *(trend or []),
-            *(bands or []),
-        ]
-    )
+    selected = _unique(trend or [])
     contract = load_contract(CONTRACT_FILE)
 
     charts = _safe_dict(
@@ -2127,7 +1889,6 @@ def update_cvd_candles(
         allow_duplicate=True,
     ),
     Input("cvd-trend-selectors", "value"),
-    Input("cvd-band-selectors", "value"),
     Input("cvd-derived-selectors", "value"),
     Input("cvd-momentum-selectors", "value"),
     Input("cvd-volatility-selectors", "value"),
@@ -2136,7 +1897,6 @@ def update_cvd_candles(
 )
 def persist_cvd_selection_and_open_analysis(
     trend: list[str] | None,
-    bands: list[str] | None,
     derived: list[str] | None,
     momentum: list[str] | None,
     volatility: list[str] | None,
@@ -2144,7 +1904,6 @@ def persist_cvd_selection_and_open_analysis(
 ):
     payload = _selection_payload(
         trend,
-        bands,
         derived,
         momentum,
         volatility,
@@ -2217,12 +1976,7 @@ def render(
         )
 
     initial = _default_selection()
-    selected_overlays = _unique(
-        [
-            *initial["trend"],
-            *initial["bands"],
-        ]
-    )
+    selected_overlays = _unique(initial["trend"])
 
     return screen_page(
         _cvd_stylesheet(),

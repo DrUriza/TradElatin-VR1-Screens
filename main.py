@@ -7,7 +7,7 @@ from app import app
 
 
 HOST = "127.0.0.1"
-PORT = 8039
+PORT = 8002
 URL = f"http://{HOST}:{PORT}"
 
 

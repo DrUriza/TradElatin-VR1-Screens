@@ -16,11 +16,12 @@ from screen_core.components import (
     screen_page,
 )
 from screen_core.contract_loader import load_contract
+from screen_core.figures import apply_analysis_figure_layout
 
 
 ROUTE = "/etf-exchange-flows"
 LABEL = "ETF Flows"
-CONTRACT_FILE = "etf_exchange_flows_screen.json"
+CONTRACT_FILE = "etf_exchange_flows_VR1_FINAL.json"
 HAS_ANALYSIS = True
 
 REFERENCE_IMAGES = [
@@ -37,36 +38,19 @@ TEXT = "#d9e8f5"
 MUTED = "#7f96aa"
 
 TRACE_COLORS = {
-    "ema_9": "#2f80ff",
-    "ema_21": "#00c2ff",
-    "ema_50": "#9b51e0",
-    "sma_20": "#00d4ff",
-    "sma_50": "#f2c94c",
-    "sma_100": "#dc59d7",
-    "sma_200": "#ff334f",
-    "wma_20": "#a879ff",
-    "wma_50": "#ff8a3d",
-    "bollinger_upper": "#2d7dff",
-    "bollinger_middle": "#65a8ff",
-    "bollinger_lower": "#2d7dff",
-    "regression_upper": "#e6a93a",
-    "regression_middle": "#f4cf65",
-    "regression_lower": "#e6a93a",
-    "macd": "#0788e8",
-    "signal": "#ff6a00",
-    "histogram": "#17d49b",
-    "rsi": "#b45bea",
-    "tsi": "#1ed1dd",
-    "adx": "#d3c2a8",
-    "di_plus": "#20d05c",
-    "di_minus": "#ff273b",
-    "k": "#008fff",
-    "d": "#ff6a00",
-    "williams_r": "#b64fe6",
-    "cci": "#14c8dc",
-    "atr": "#ff9f00",
-    "wasserstein_distance": "#3c94ed",
-    "bollinger_band_width": "#17c8ce",
+    "flow_momentum_z": "#2f80ff",
+    "rolling_flow_z": "#00c2ff",
+    "persistence_score": "#17d49b",
+    "zscore": "#a879ff",
+    "btc_return_z": "#f2c94c",
+    "etf_flow_z": "#2f80ff",
+    "divergence_score": "#ff8a3d",
+    "pressure": "#17d49b",
+    "netflow_z": "#00c2ff",
+    "reserve_change_z": "#ff506e",
+    "reserve_roc_z": "#f2994a",
+    "capital_regime_score": "#17d49b",
+    "wasserstein_distance": "#8a7dff",
 }
 
 ETF_RANGE_POINTS = {"30d": 30, "90d": 90, "360d": 360}
@@ -74,97 +58,75 @@ ETF_RANGE_POINTS = {"30d": 30, "90d": 90, "360d": 360}
 SELECTION_STORE_ID = "etf-technical-selection"
 ANALYSIS_CONTENT_ID = "etf-analysis-content"
 
-TREND_OPTIONS = [
-    {"label": "EMA 9", "value": "ema_9"},
-    {"label": "EMA 21", "value": "ema_21"},
-    {"label": "EMA 50", "value": "ema_50"},
-    {"label": "SMA 20", "value": "sma_20"},
-    {"label": "SMA 50", "value": "sma_50"},
-    {"label": "SMA 100", "value": "sma_100"},
-    {"label": "SMA 200", "value": "sma_200"},
-    {"label": "WMA 20", "value": "wma_20"},
-    {"label": "WMA 50", "value": "wma_50"},
-]
-
-BAND_OPTIONS = [
-    {
-        "label": "Bollinger Bands (20, 2)",
-        "value": "bollinger_bands",
-    },
-    {
-        "label": "Canal de Regresión",
-        "value": "regression_channel",
-    },
-]
+# Pantalla A no aplica análisis técnico clásico a ETF Flow ni Exchange Reserve.
+TREND_OPTIONS: list[dict[str, str]] = []
+BAND_OPTIONS: list[dict[str, str]] = []
 
 DERIVED_OPTIONS = [
     {
-        "label": "ADX / DI+ / DI- (14)",
-        "value": "adx",
+        "label": "ETF Flow Momentum / Persistence",
+        "value": "etf_flow_momentum_persistence",
     },
     {
-        "label": "Bollinger Band Width (20, 2)",
-        "value": "bollinger_band_width",
+        "label": "ETF Flow Z-Score",
+        "value": "etf_flow_zscore",
     },
 ]
 
 MOMENTUM_OPTIONS = [
     {
-        "label": "MACD (12, 26, 9)",
-        "value": "macd",
-    },
-    {"label": "RSI (14)", "value": "rsi"},
-    {"label": "TSI (25, 13)", "value": "tsi"},
-    {
-        "label": "Stochastic (14, 3, 3)",
-        "value": "stochastic",
+        "label": "BTC Price ↔ ETF Flow Divergence",
+        "value": "btc_etf_flow_divergence",
     },
     {
-        "label": "Williams %R (14)",
-        "value": "williams_r",
+        "label": "Exchange Flow Pressure",
+        "value": "exchange_flow_pressure",
     },
-    {"label": "CCI (20)", "value": "cci"},
+    {
+        "label": "Exchange Reserve Change / Z-Score",
+        "value": "exchange_reserve_change",
+    },
 ]
 
 VOLATILITY_OPTIONS = [
-    {"label": "ATR (14)", "value": "atr"},
     {
-        "label": "Wasserstein Distance",
-        "value": "wasserstein_distance",
+        "label": "ETF × Exchange Capital Regime / Wasserstein",
+        "value": "capital_regime_wasserstein",
     },
 ]
 
-DEFAULT_TREND = ["ema_9", "ema_21", "sma_50"]
-DEFAULT_BANDS = ["bollinger_bands"]
-DEFAULT_DERIVED: list[str] = []
-DEFAULT_MOMENTUM: list[str] = []
-DEFAULT_VOLATILITY: list[str] = []
+DEFAULT_TREND: list[str] = []
+DEFAULT_BANDS: list[str] = []
+DEFAULT_DERIVED = [
+    "etf_flow_momentum_persistence",
+    "etf_flow_zscore",
+]
+DEFAULT_MOMENTUM = [
+    "btc_etf_flow_divergence",
+    "exchange_flow_pressure",
+    "exchange_reserve_change",
+]
+DEFAULT_VOLATILITY = ["capital_regime_wasserstein"]
 
 ANALYSIS_ORDER = (
-    "macd",
-    "rsi",
-    "tsi",
-    "adx",
-    "stochastic",
-    "williams_r",
-    "cci",
-    "atr",
-    "wasserstein_distance",
-    "bollinger_band_width",
+    "etf_flow_momentum_persistence",
+    "etf_flow_zscore",
+    "btc_etf_flow_divergence",
+    "exchange_flow_pressure",
+    "exchange_reserve_change",
+    "capital_regime_wasserstein",
 )
 
 INDICATOR_LABELS = {
-    "macd": "MACD (12, 26, 9)",
-    "rsi": "RSI (14)",
-    "tsi": "TSI (25, 13)",
-    "adx": "ADX / DI+ / DI- (14)",
-    "stochastic": "STOCHASTIC (14, 3, 3)",
-    "williams_r": "WILLIAMS %R (14)",
-    "cci": "CCI (20)",
-    "atr": "ATR (14)",
-    "wasserstein_distance": "WASSERSTEIN DISTANCE",
-    "bollinger_band_width": "BOLLINGER BAND WIDTH (20, 2)",
+    "etf_flow_momentum_persistence": "ETF FLOW MOMENTUM / PERSISTENCE",
+    "etf_flow_zscore": "ETF FLOW Z-SCORE",
+    "btc_etf_flow_divergence": "BTC PRICE ↔ ETF FLOW DIVERGENCE",
+    "exchange_flow_pressure": "EXCHANGE FLOW PRESSURE",
+    "exchange_reserve_change": "EXCHANGE RESERVE CHANGE / Z-SCORE",
+    "capital_regime_wasserstein": "ETF × EXCHANGE CAPITAL REGIME / WASSERSTEIN",
 }
+
+SCREEN_REVISION = "ETF_RENDER_CALLBACK_CLEANUP_V2"
 
 LOCAL_CSS = """
 .etf-main-grid {
@@ -571,7 +533,7 @@ def _selector_panel() -> html.Div:
                 },
                 children=[
                     dcc.Link(
-                        "ANÁLISIS TÉCNICO FUNDAMENTAL",
+                        "ANÁLISIS DE FLUJOS Y CAPITAL",
                         href=f"{ROUTE}/analysis",
                         className="etf-button",
                         style={
@@ -600,7 +562,6 @@ def _selector_panel() -> html.Div:
                             "textDecoration": "none",
                         },
                     ),
-                    # Legacy callback target kept hidden during migration.
                     html.Button(
                         "",
                         id="etf-open-analysis",
@@ -611,63 +572,34 @@ def _selector_panel() -> html.Div:
                 ],
             ),
             html.Div(
-                "EXCHANGE BALANCE · INDICADORES",
+                "ETF & EXCHANGE FLOWS · PANTALLA B",
                 className="etf-heading",
             ),
             html.Div(
                 (
-                    "Único objetivo técnico de la familia ETF. "
-                    "ETF Flow y Exchange Net Flow permanecen "
-                    "como barras. Sin Volume ni MFI."
+                    "Analítica nativa de movimiento de capital. "
+                    "La HMI sólo grafica métricas precomputadas por Processing; "
+                    "no aplica RSI/MACD/ATR ni medias móviles a reservas o flujos."
                 ),
                 className="etf-note",
             ),
             _group(
-                "TENDENCIA · SOBRE EXCHANGE BALANCE",
-                _checklist(
-                    "etf-trend",
-                    TREND_OPTIONS,
-                    DEFAULT_TREND,
-                ),
-            ),
-            _group(
-                "BANDAS Y CANALES · SOBRE EXCHANGE BALANCE",
-                _checklist(
-                    "etf-bands",
-                    BAND_OPTIONS,
-                    DEFAULT_BANDS,
-                ),
-            ),
-            _group(
-                "ANÁLISIS DERIVADO · PANTALLA B",
-                _checklist(
-                    "etf-derived",
-                    DERIVED_OPTIONS,
-                    DEFAULT_DERIVED,
-                ),
+                "INSTITUTIONAL FLOW · PANTALLA B",
+                _checklist("etf-derived", DERIVED_OPTIONS, DEFAULT_DERIVED),
                 analysis_only=True,
             ),
             _group(
-                "MOMENTUM · PANTALLA B",
-                _checklist(
-                    "etf-momentum",
-                    MOMENTUM_OPTIONS,
-                    DEFAULT_MOMENTUM,
-                ),
+                "PRICE & EXCHANGE CAPITAL · PANTALLA B",
+                _checklist("etf-momentum", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
                 analysis_only=True,
             ),
             _group(
-                "VOLATILIDAD · PANTALLA B",
-                _checklist(
-                    "etf-volatility",
-                    VOLATILITY_OPTIONS,
-                    DEFAULT_VOLATILITY,
-                ),
+                "CAPITAL REGIME · PANTALLA B",
+                _checklist("etf-volatility", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
                 analysis_only=True,
             ),
         ],
     )
-
 
 def _range_indices(timestamps: list[int], range_id: str | None) -> list[int]:
     if not timestamps:
@@ -678,10 +610,36 @@ def _range_indices(timestamps: list[int], range_id: str | None) -> list[int]:
 
 def _filtered_point_chart(chart: dict[str, Any], range_id: str | None) -> dict[str, Any]:
     result = dict(chart)
-    points = [p for p in _safe_list(chart.get("points")) if isinstance(p, dict) and p.get("timestamp") is not None]
+    points = [
+        point
+        for point in _safe_list(chart.get("points"))
+        if isinstance(point, dict) and point.get("timestamp") is not None
+    ]
     if points:
-        indices = _range_indices([int(p["timestamp"]) for p in points], range_id)
-        result["points"] = [points[i] for i in indices]
+        indices = _range_indices([int(point["timestamp"]) for point in points], range_id)
+        result["points"] = [points[index] for index in indices]
+
+    raw_series = _safe_list(chart.get("series"))
+    if raw_series:
+        filtered_series = []
+        for raw_item in raw_series:
+            if not isinstance(raw_item, dict):
+                continue
+            item = dict(raw_item)
+            item_points = [
+                point
+                for point in _safe_list(raw_item.get("points"))
+                if isinstance(point, dict) and point.get("timestamp") is not None
+            ]
+            if item_points:
+                indices = _range_indices(
+                    [int(point["timestamp"]) for point in item_points],
+                    range_id,
+                )
+                item["points"] = [item_points[index] for index in indices]
+            filtered_series.append(item)
+        result["series"] = filtered_series
+
     return result
 
 def _exchange_balance_figure(
@@ -689,329 +647,79 @@ def _exchange_balance_figure(
     selected_overlays: list[str],
     range_id: str | None = None,
 ) -> go.Figure:
-    chart = _safe_dict(
-        _safe_dict(contract.get("charts")).get(
-            "exchange_balance"
-        )
-    )
-    candles = [
-        candle
-        for candle in _safe_list(chart.get("candles"))
-        if isinstance(candle, dict)
-        and all(
-            candle.get(field) is not None
-            for field in (
-                "timestamp",
-                "open",
-                "high",
-                "low",
-                "close",
-            )
-        )
+    del selected_overlays
+    chart = _safe_dict(_safe_dict(contract.get("charts")).get("exchange_balance"))
+    points = [
+        point
+        for point in _safe_list(chart.get("points"))
+        if isinstance(point, dict)
+        and point.get("timestamp") is not None
+        and isinstance(point.get("value"), (int, float))
     ]
 
-    all_candles = candles
-    all_timestamps = [int(candle["timestamp"]) for candle in all_candles]
-    range_indices = _range_indices(all_timestamps, range_id)
-    candles = [all_candles[index] for index in range_indices]
+    # Backward-compatible fallback for older contracts that still carry OHLC candles.
+    if not points:
+        points = [
+            {
+                "timestamp": candle.get("timestamp"),
+                "value": candle.get("close"),
+            }
+            for candle in _safe_list(chart.get("candles"))
+            if isinstance(candle, dict)
+            and candle.get("timestamp") is not None
+            and isinstance(candle.get("close"), (int, float))
+        ]
 
+    timestamps_all = [int(point["timestamp"]) for point in points]
+    indices = _range_indices(timestamps_all, range_id)
+    points = [points[index] for index in indices]
     fig = go.Figure()
 
-    if not candles:
+    if not points:
         fig.add_annotation(
-            text=(
-                "OHLC UNAVAILABLE"
-                "<br><span style='font-size:9px'>"
-                "Processing debe empaquetar candles[] reales"
-                "</span>"
-            ),
+            text="EXCHANGE RESERVE UNAVAILABLE",
             x=.5,
             y=.5,
             xref="paper",
             yref="paper",
             showarrow=False,
-            font={
-                "color": MUTED,
-                "size": 12,
-            },
+            font={"color": MUTED, "size": 11},
         )
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
     else:
-        selected = set(selected_overlays)
-        x = [
-            _dt(candle["timestamp"])
-            for candle in candles
-        ]
-
+        x = [_dt(point["timestamp"]) for point in points]
+        y = [float(point["value"]) for point in points]
         fig.add_trace(
-            go.Candlestick(
+            go.Scatter(
                 x=x,
-                open=[candle["open"] for candle in candles],
-                high=[candle["high"] for candle in candles],
-                low=[candle["low"] for candle in candles],
-                close=[candle["close"] for candle in candles],
-                increasing={
-                    "line": {"color": GREEN},
-                    "fillcolor": GREEN,
-                },
-                decreasing={
-                    "line": {"color": RED},
-                    "fillcolor": RED,
-                },
-                showlegend=False,
-                name="EXCHANGE BALANCE",
+                y=y,
+                mode="lines",
+                name="EXCHANGE RESERVE",
+                line={"color": "#2f80ff", "width": 1.65},
+                fill="tozeroy",
+                fillcolor="rgba(47,128,255,0.08)",
+                hovertemplate="Reserve: %{y:,.0f} BTC<extra></extra>",
             )
         )
-
-        technical = _safe_dict(
-            contract.get("technical_analysis")
-        )
-        overlays = _safe_dict(
-            technical.get("overlays")
-        )
-        moving = _safe_dict(
-            _safe_dict(
-                overlays.get("moving_averages")
-            ).get("series")
-        )
-
-        for indicator_id in (
-            "ema_9",
-            "ema_21",
-            "ema_50",
-            "sma_20",
-            "sma_50",
-            "sma_100",
-            "sma_200",
-            "wma_20",
-            "wma_50",
-        ):
-            if indicator_id not in selected:
-                continue
-
-            values_all = _safe_list(moving.get(indicator_id))
-            if len(values_all) != len(all_candles):
-                continue
-            values = [values_all[index] for index in range_indices]
-
-            fig.add_trace(
-                go.Scatter(
-                    x=x,
-                    y=values,
-                    mode="lines",
-                    line={
-                        "color": TRACE_COLORS[indicator_id],
-                        "width": 1.05,
-                    },
-                    showlegend=False,
-                    connectgaps=False,
-                    name=indicator_id.upper(),
-                    hovertemplate=(
-                        f"{indicator_id.upper()}: "
-                        "%{y:,.4f}<extra></extra>"
-                    ),
-                )
-            )
-
-        if "bollinger_bands" in selected:
-            bb = _safe_dict(
-                overlays.get("bollinger_bands")
-            )
-            series = _safe_dict(bb.get("series"))
-
-            for name, dash in (
-                ("upper", "dot"),
-                ("middle", "dash"),
-                ("lower", "dot"),
-            ):
-                values_all = _safe_list(series.get(name))
-                if len(values_all) != len(all_candles):
-                    continue
-                values = [values_all[index] for index in range_indices]
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=x,
-                        y=values,
-                        mode="lines",
-                        line={
-                            "color": TRACE_COLORS[
-                                f"bollinger_{name}"
-                            ],
-                            "width": 1,
-                            "dash": dash,
-                        },
-                        showlegend=False,
-                        connectgaps=False,
-                    )
-                )
-
-        if "regression_channel" in selected:
-            regression = _safe_dict(
-                overlays.get("regression_channel")
-            )
-            series = _safe_dict(regression.get("series"))
-
-            for name, dash in (
-                ("upper", "dot"),
-                ("middle", "dash"),
-                ("lower", "dot"),
-            ):
-                values_all = _safe_list(series.get(name))
-                if len(values_all) != len(all_candles):
-                    continue
-                values = [values_all[index] for index in range_indices]
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=x,
-                        y=values,
-                        mode="lines",
-                        line={
-                            "color": TRACE_COLORS[
-                                f"regression_{name}"
-                            ],
-                            "width": 1,
-                            "dash": dash,
-                        },
-                        showlegend=False,
-                        connectgaps=False,
-                    )
-                )
-
-        # All contractual moving-average/channel crosses.
-        candle_by_timestamp = {
-            int(candle["timestamp"]): candle
-            for candle in candles
-        }
-
-        grouped: dict[
-            tuple[int, str],
-            list[dict[str, Any]],
-        ] = {}
-
-        for event in _safe_list(
-            technical.get("events")
-        ):
-            if not isinstance(event, dict):
-                continue
-
-            if event.get("event_group") not in {
-                "moving_average_cross",
-                "channel_cross",
-            }:
-                continue
-
-            requirements = set(
-                str(value)
-                for value in _safe_list(
-                    event.get("selection_requirements")
-                )
-            )
-
-            if requirements and not requirements.issubset(selected):
-                continue
-
-            try:
-                timestamp = int(event.get("timestamp"))
-            except (TypeError, ValueError):
-                continue
-
-            if timestamp not in candle_by_timestamp:
-                continue
-
-            signal = str(event.get("signal") or "")
-            if signal not in {"bullish", "bearish"}:
-                continue
-
-            grouped.setdefault(
-                (timestamp, signal),
-                [],
-            ).append(event)
-
-        for (timestamp, signal), cluster in grouped.items():
-            candle = candle_by_timestamp[timestamp]
-            high = float(candle["high"])
-            low = float(candle["low"])
-            candle_range = max(abs(high - low), 0.25)
-
-            # Draw every event. Events on the same candle are vertically
-            # staggered instead of hidden on top of one another.
-            for rank, event in enumerate(cluster):
-                offset = candle_range * (
-                    0.55 + 0.28 * rank
-                )
-
-                if signal == "bullish":
-                    y_value = low - offset
-                    symbol = "arrow-up"
-                    color = GREEN
-                else:
-                    y_value = high + offset
-                    symbol = "arrow-down"
-                    color = RED
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=[_dt(timestamp)],
-                        y=[y_value],
-                        mode="markers",
-                        marker={
-                            "symbol": symbol,
-                            "size": 9,
-                            "color": color,
-                            "line": {
-                                "width": 1,
-                                "color": "#03101a",
-                            },
-                        },
-                        showlegend=False,
-                        cliponaxis=False,
-                        hovertemplate=(
-                            f"{event.get('label') or event.get('event_id')}"
-                            "<extra></extra>"
-                        ),
-                    )
-                )
 
     fig.update_layout(
         title={
-            "text": "EXCHANGE BALANCE (BTC)",
+            "text": "EXCHANGE RESERVE / BALANCE (BTC)",
             "x": .01,
-            "font": {
-                "size": 10,
-                "color": TEXT,
-            },
+            "font": {"size": 10, "color": TEXT},
         },
         height=291,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
-        margin={
-            "l": 42,
-            "r": 10,
-            "t": 34,
-            "b": 24,
-        },
-        font={
-            "family": "Inter, Segoe UI, sans-serif",
-            "color": TEXT,
-            "size": 8,
-        },
+        margin={"l": 42, "r": 10, "t": 34, "b": 24},
+        font={"family": "Inter, Segoe UI, sans-serif", "color": TEXT, "size": 8},
         showlegend=False,
         hovermode="x unified",
-        xaxis_rangeslider_visible=False,
-        uirevision="etf-exchange-balance",
+        uirevision="etf-exchange-reserve",
     )
-    fig.update_xaxes(
-        gridcolor=GRID,
-        zeroline=False,
-    )
-    fig.update_yaxes(
-        gridcolor=GRID,
-        zeroline=False,
-    )
-
+    fig.update_xaxes(gridcolor=GRID, zeroline=False)
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, tickformat=",.0f")
     return fig
 
 def _indicator_figure(
@@ -1019,14 +727,8 @@ def _indicator_figure(
     indicator_id: str,
     range_id: str | None = None,
 ) -> go.Figure:
-    technical = _safe_dict(
-        contract.get("technical_analysis")
-    )
-    indicator = _safe_dict(
-        _safe_dict(
-            technical.get("indicators")
-        ).get(indicator_id)
-    )
+    analysis = _safe_dict(contract.get("capital_flow_analysis"))
+    indicator = _safe_dict(_safe_dict(analysis.get("indicators")).get(indicator_id))
     timestamps_all = [int(v) for v in _safe_list(indicator.get("timestamps"))]
     series_all = _safe_dict(indicator.get("series"))
     indices = _range_indices(timestamps_all, range_id)
@@ -1038,7 +740,6 @@ def _indicator_figure(
     }
 
     fig = go.Figure()
-
     if not timestamps or not series:
         fig.add_annotation(
             text="UNAVAILABLE",
@@ -1047,73 +748,41 @@ def _indicator_figure(
             xref="paper",
             yref="paper",
             showarrow=False,
-            font={
-                "color": MUTED,
-                "size": 11,
-            },
+            font={"color": MUTED, "size": 11},
         )
         fig.update_xaxes(visible=False)
         fig.update_yaxes(visible=False)
     else:
         x = [_dt(value) for value in timestamps]
-
         for name, values in series.items():
-            if not isinstance(values, list):
-                continue
-
-            if indicator_id == "macd" and name == "histogram":
-                fig.add_trace(
-                    go.Bar(
-                        x=x,
-                        y=values,
-                        marker_color=[
-                            GREEN
-                            if isinstance(value, (int, float)) and value >= 0
-                            else RED
-                            for value in values
-                        ],
-                        opacity=.78,
-                        showlegend=False,
-                        name=name,
-                    )
-                )
-                continue
-
-            # Every technical series receives an explicit color.  TSI now has
-            # both oscillator and signal line in the JSON.
-            line_color = TRACE_COLORS.get(
-                name,
-                TRACE_COLORS.get(indicator_id, "#22c7e8"),
-            )
-
             fig.add_trace(
                 go.Scatter(
                     x=x,
                     y=values,
                     mode="lines",
                     line={
-                        "width": 1.25,
-                        "color": line_color,
+                        "width": 1.3,
+                        "color": TRACE_COLORS.get(name, "#22c7e8"),
                     },
-                    showlegend=False,
+                    showlegend=True,
                     connectgaps=False,
-                    name=name,
+                    name=name.replace("_", " ").upper(),
+                    hovertemplate=(
+                        name.replace("_", " ").upper()
+                        + ": %{y:.3f}<extra></extra>"
+                    ),
                 )
             )
 
-        for threshold in _safe_list(
-            indicator.get("thresholds")
-        ):
+        for threshold in _safe_list(indicator.get("thresholds")):
             if not isinstance(threshold, dict):
                 continue
-
             value = threshold.get("value")
-
             if isinstance(value, (int, float)):
                 role = str(threshold.get("role") or "")
                 line_color = (
-                    "rgba(255,80,110,.62)" if role == "overbought"
-                    else "rgba(23,212,155,.62)" if role == "oversold"
+                    "rgba(255,80,110,.62)" if role in {"high", "distribution", "extreme_positive"}
+                    else "rgba(23,212,155,.62)" if role in {"low", "accumulation", "extreme_negative"}
                     else "rgba(140,155,168,.52)"
                 )
                 fig.add_hline(
@@ -1126,110 +795,21 @@ def _indicator_figure(
                     annotation_font={"size": 6, "color": MUTED},
                 )
 
-    # Contractual Screen-B arrows: MACD, ADX/DI and Stochastic.
-    allowed_events = {
-        "macd": {
-            "macd_above_signal",
-            "macd_below_signal",
-        },
-        "adx": {
-            "di_plus_above_di_minus",
-            "di_plus_below_di_minus",
-        },
-        "stochastic": {
-            "k_above_d",
-            "k_below_d",
-        },
-    }.get(indicator_id, set())
-
-    visible_timestamps = set(timestamps)
-
-    if allowed_events:
-        for event in _safe_list(
-            technical.get("events")
-        ):
-            if not isinstance(event, dict):
-                continue
-
-            if event.get("event_group") not in {
-                "indicator_cross", "macd_cross", "adx_cross", "stochastic_cross"
-            }:
-                continue
-
-            if event.get("event_id") not in allowed_events:
-                continue
-
-            try:
-                timestamp = int(event.get("timestamp"))
-            except (TypeError, ValueError):
-                continue
-
-            if timestamp not in visible_timestamps:
-                continue
-
-            calculation = _safe_dict(
-                event.get("calculation")
-            )
-            first_value = calculation.get("first_value")
-            second_value = calculation.get("second_value")
-
-            if not isinstance(first_value, (int, float)):
-                continue
-            if not isinstance(second_value, (int, float)):
-                continue
-
-            y = (
-                float(first_value)
-                + float(second_value)
-            ) / 2.0
-
-            if event.get("signal") == "bullish":
-                symbol = "arrow-up"
-                color = GREEN
-            elif event.get("signal") == "bearish":
-                symbol = "arrow-down"
-                color = RED
-            else:
-                continue
-
-            fig.add_trace(
-                go.Scatter(
-                    x=[_dt(timestamp)],
-                    y=[y],
-                    mode="markers",
-                    marker={
-                        "symbol": symbol,
-                        "size": 8,
-                        "color": color,
-                        "line": {
-                            "width": 1,
-                            "color": "#03101a",
-                        },
-                    },
-                    showlegend=False,
-                    cliponaxis=False,
-                    hovertemplate=(
-                        f"{event.get('label') or event.get('event_id')}"
-                        "<extra></extra>"
-                    ),
-                )
-            )
-
     fig.update_layout(
-        height=152,
+        height=310,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
-        margin={
-            "l": 34,
-            "r": 8,
-            "t": 5,
-            "b": 29,
+        margin={"l": 34, "r": 8, "t": 5, "b": 29},
+        font={"size": 7, "color": MUTED},
+        showlegend=True,
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.01,
+            "xanchor": "left",
+            "x": 0,
+            "font": {"size": 6},
         },
-        font={
-            "size": 7,
-            "color": MUTED,
-        },
-        showlegend=False,
     )
     fig.update_xaxes(
         showticklabels=True,
@@ -1238,30 +818,8 @@ def _indicator_figure(
         nticks=4,
         automargin=True,
     )
-
-    if indicator_id in {"rsi", "stochastic"}:
-        fig.update_yaxes(
-            gridcolor=GRID,
-            zeroline=False,
-            range=[0, 100],
-            ticksuffix="%",
-            tickfont={"size": 6},
-        )
-    elif indicator_id == "tsi":
-        fig.update_yaxes(
-            gridcolor=GRID,
-            zeroline=False,
-            range=[-100, 100],
-            tickfont={"size": 6},
-        )
-    else:
-        fig.update_yaxes(
-            gridcolor=GRID,
-            zeroline=False,
-        )
-
-    return fig
-
+    fig.update_yaxes(gridcolor=GRID, zeroline=True, zerolinecolor="rgba(140,155,168,.25)")
+    return apply_analysis_figure_layout(fig)
 
 def _selected_analysis(
     selection: Any,
@@ -1304,7 +862,7 @@ def _etf_strength_dots(count: Any, color: str) -> html.Span:
 def _etf_summary_panel(
     block: dict[str, Any],
     selected_ids: list[str],
-    title: str = "RESUMEN DE INDICADORES",
+    title: str = "RESUMEN DE FLUJOS Y CAPITAL",
 ) -> html.Div:
     indicators = _safe_dict(block.get("indicators"))
     chosen = [
@@ -1317,33 +875,29 @@ def _etf_summary_panel(
         html.Div(
             className="etf-summary-head",
             children=[
-                html.Span("INDICADOR"),
+                html.Span("MÉTRICA"),
                 html.Span("VALOR", style={"textAlign": "right"}),
-                html.Span("SEÑAL", style={"textAlign": "right"}),
+                html.Span("ESTADO", style={"textAlign": "right"}),
                 html.Span("FUERZA", style={"textAlign": "right"}),
             ],
         )
     ]
 
     sections = (
-        ("trend", "TENDENCIA", "#20d05c"),
-        ("momentum", "MOMENTUM", "#a65cff"),
-        ("volatility", "VOLATILIDAD", "#ffab00"),
-        ("distribution", "DISTRIBUCIÓN", "#2ea8ff"),
+        ("institutional", "INSTITUTIONAL FLOW", "#2ea8ff"),
+        ("confirmation", "PRICE CONFIRMATION", "#a65cff"),
+        ("exchange", "EXCHANGE CAPITAL", "#ffab00"),
+        ("regime", "CAPITAL REGIME", "#20d05c"),
     )
 
     for section_id, section_title, section_color in sections:
         section_rows = []
-
         for indicator_id in chosen:
             indicator = _safe_dict(indicators.get(indicator_id))
             summary = _safe_dict(indicator.get("summary"))
-
             if summary.get("section") != section_id:
                 continue
-
             signal_color = str(summary.get("signal_color") or "#93a2ad")
-
             section_rows.append(
                 html.Div(
                     className="etf-summary-row",
@@ -1361,17 +915,12 @@ def _etf_summary_panel(
                             className="etf-summary-signal",
                             style={"color": signal_color},
                         ),
-                        _etf_strength_dots(
-                            summary.get("strength"),
-                            signal_color,
-                        ),
+                        _etf_strength_dots(summary.get("strength"), signal_color),
                     ],
                 )
             )
-
         if not section_rows:
             continue
-
         body.append(
             html.Div(
                 className="etf-summary-section",
@@ -1391,7 +940,6 @@ def _etf_summary_panel(
             *body,
         ],
     )
-
 
 def _etf_strength_legend() -> html.Div:
     rows = (
@@ -1453,10 +1001,6 @@ def _analysis_screen(
                         )
                 ],
             ),
-                screen_header(
-                    contract,
-                    "ANÁLISIS TÉCNICO FUNDAMENTAL",
-                ),
                 html.Div(
                     (
                         "No seleccionaste indicadores "
@@ -1493,8 +1037,8 @@ def _analysis_screen(
                             "responsive": True,
                         },
                         style={
-                            "height": "152px",
-                            "minHeight": "152px",
+                            "height": "310px",
+                            "minHeight": "310px",
                             "width": "100%",
                         },
                     ),
@@ -1525,13 +1069,6 @@ def _analysis_screen(
                         )
                 ],
             ),
-            screen_header(
-                contract,
-                (
-                    "ANÁLISIS TÉCNICO FUNDAMENTAL "
-                    "· EXCHANGE BALANCE"
-                ),
-            ),
             html.Div(
                 className="etf-analysis-layout",
                 children=[
@@ -1543,7 +1080,7 @@ def _analysis_screen(
                         className="etf-summary-column",
                         children=[
                             _etf_summary_panel(
-                                _safe_dict(contract.get("technical_analysis")),
+                                _safe_dict(contract.get("capital_flow_analysis")),
                                 selected,
                             ),
                             _etf_strength_legend(),
@@ -1567,37 +1104,6 @@ def return_to_etf_screen_a(clicks: int | None):
 
 @callback(
     Output(
-        "etf-exchange-balance",
-        "figure",
-    ),
-    Input("etf-trend", "value"),
-    Input("etf-bands", "value"),
-    Input("range-selector", "value"),
-    Input("reload-json", "n_clicks"),
-    prevent_initial_call=True,
-)
-def update_exchange_balance(
-    trend: list[str] | None,
-    bands: list[str] | None,
-    range_id: str | None,
-    _reload: int | None,
-):
-    contract = load_contract(CONTRACT_FILE)
-
-    return _exchange_balance_figure(
-        contract,
-        _unique(
-            [
-                *(trend or []),
-                *(bands or []),
-            ]
-        ),
-        range_id,
-    )
-
-
-@callback(
-    Output(
         SELECTION_STORE_ID,
         "data",
     ),
@@ -1606,28 +1112,23 @@ def update_exchange_balance(
         "value",
         allow_duplicate=True,
     ),
-    Input("etf-trend", "value"),
-    Input("etf-bands", "value"),
-    Input("etf-derived", "value"),
-    Input("etf-momentum", "value"),
-    Input("etf-volatility", "value"),
+    Input("etf-derived", "value", allow_optional=True),
+    Input("etf-momentum", "value", allow_optional=True),
+    Input("etf-volatility", "value", allow_optional=True),
     Input(
         "etf-open-analysis",
         "n_clicks",
+        allow_optional=True,
     ),
     prevent_initial_call=True,
 )
 def persist_selection(
-    trend: list[str] | None,
-    bands: list[str] | None,
     derived: list[str] | None,
     momentum: list[str] | None,
     volatility: list[str] | None,
     open_clicks: int | None,
 ):
     payload = {
-        "trend": _unique(trend or []),
-        "bands": _unique(bands or []),
         "derived_analysis": _unique(
             derived or []
         ),
@@ -1704,13 +1205,6 @@ def render(
                 id=SELECTION_STORE_ID,
                 storage_type="local",
             ),
-            # Hidden target keeps callback valid.
-            html.Div(
-                dcc.Graph(
-                    id="etf-exchange-balance"
-                ),
-                style={"display": "none"},
-            ),
             html.Div(
                 id=ANALYSIS_CONTENT_ID,
                 children=_analysis_screen(
@@ -1771,12 +1265,7 @@ def render(
                         figure=(
                             _exchange_balance_figure(
                                 contract,
-                                _unique(
-                                    [
-                                        *initial["trend"],
-                                        *initial["bands"],
-                                    ]
-                                ),
+                                [],
                                 range_id,
                             )
                         ),

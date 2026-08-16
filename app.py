@@ -278,7 +278,6 @@ app.layout = html.Div(
         html.Div(
             [
                 selector_box('VIEW', 'screen-view'),
-                selector_box('MARKET', 'market-selector'),
                 html.Div(id='contract-revision', className='revision-text'),
             ],
             style={'display': 'none'},
@@ -300,6 +299,7 @@ app.layout = html.Div(
                         html.Div(
                             className='compact-family-controls',
                             children=[
+                                selector_buttons('MARKET', 'market-selector'),
                                 selector_buttons('TIMEFRAME', 'timeframe-selector'),
                                 # Range-backed families keep their contractual selector
                                 # internally, but use the same compact TIMEFRAME label.
@@ -384,6 +384,12 @@ def sync_controls(
     selected_view = route_view
 
     market_options, market_default = selector_spec(contract, 'market')
+    selectors = contract.get('selectors') if isinstance(contract.get('selectors'), dict) else {}
+    market_config = selectors.get('market') if isinstance(selectors.get('market'), dict) else {}
+    market_visible = bool(market_options) and (
+        market_config.get('visible') is True
+        or (module.ROUTE == liquidity_microstructure.ROUTE and market_config.get('visible') is not False)
+    )
 
     # Temporal UI is route-governed, not inferred. This prevents historical
     # context stored inside Liquidity/Liquidations contracts from accidentally
@@ -415,7 +421,7 @@ def sync_controls(
         selected_view,
         market_options,
         selected_market,
-        shown if market_options else hidden,
+        shown if market_visible else hidden,
         timeframe_options,
         selected_timeframe,
         shown if timeframe_options else hidden,

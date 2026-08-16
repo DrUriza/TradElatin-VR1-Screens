@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any
 
 import plotly.graph_objects as go
 from dash import dcc, html
 
 from screen_core.components import kpi_grid, reference_gallery, screen_header, screen_page
+from screen_core.figures import apply_analysis_figure_layout
 
 ROUTE = "/liquidity"
 LABEL = "Liquidity"
-CONTRACT_FILE = "liquidity_microstructure_screen.json"
-HAS_ANALYSIS = False
+CONTRACT_FILE = "liquidity_microstructure_VR1_FINAL.json"
+HAS_ANALYSIS = True
 REFERENCE_IMAGES = ["Liquidity/08_Liquidity_Micro_Structure_A.png"]
+SCREEN_REVISION = "LIQUIDITY_SPOT_PERP_MARKET_VIEW_V3"
 
 
 _GREEN = "#11d978"
@@ -40,6 +43,37 @@ def _dict(value: Any) -> dict[str, Any]:
 
 def _list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def _selected_market_contract(contract: dict[str, Any], market: str | None) -> dict[str, Any]:
+    """Return the precomputed Spot or Perpetual microstructure view.
+
+    The HMI only selects a contract view; it does not recalculate market metrics.
+    """
+    selectors = _dict(contract.get("selectors"))
+    market_selector = _dict(selectors.get("market"))
+    context = _dict(contract.get("context"))
+    selected = str(
+        market
+        or market_selector.get("selected")
+        or market_selector.get("default")
+        or context.get("selected_market")
+        or "perpetual"
+    ).lower()
+    views = _dict(contract.get("market_views"))
+    view = _dict(views.get(selected))
+    if not view:
+        return contract
+
+    merged = dict(contract)
+    for section in ("kpis", "charts", "tables", "widgets", "liquidity_analysis"):
+        if section in view:
+            merged[section] = view[section]
+    merged_context = dict(context)
+    merged_context.update(_dict(view.get("context")))
+    merged_context["selected_market"] = selected
+    merged["context"] = merged_context
+    return merged
 
 
 def _mid_price(contract: dict[str, Any]) -> tuple[str, str]:
@@ -240,6 +274,122 @@ def _chart_card(
             ),
         ],
         style=_CARD_STYLE,
+    )
+
+
+def _executed_operations_figure(chart: dict[str, Any]) -> go.Figure:
+    timestamps = _list(chart.get("timestamps"))
+    buy = _list(chart.get("buy_executed"))
+    sell = _list(chart.get("sell_executed"))
+    net = _list(chart.get("net_pressure"))
+    size = min(len(timestamps), len(buy), len(sell), len(net))
+    x = [_dt(value) for value in timestamps[:size]]
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Bar(
+            x=x,
+            y=buy[:size],
+            name="BUY EXECUTED",
+            marker_color=_GREEN,
+            hovertemplate="BUY: $%{y:,.0f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Bar(
+            x=x,
+            y=sell[:size],
+            name="SELL EXECUTED",
+            marker_color=_RED,
+            hovertemplate="SELL: $%{y:,.0f}<extra></extra>",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=x,
+            y=net[:size],
+            mode="lines",
+            name="NET PRESSURE",
+            line={"color": _CYAN, "width": 1.8},
+            hovertemplate="NET: $%{y:,.0f}<extra></extra>",
+        )
+    )
+    fig.add_hline(
+        y=0,
+        line_width=1,
+        line_dash="dot",
+        line_color="rgba(200,214,226,.50)",
+    )
+    fig.update_layout(
+        height=300,
+        barmode="group",
+        bargap=0.18,
+        paper_bgcolor=_CARD,
+        plot_bgcolor=_CARD,
+        margin={"l": 56, "r": 18, "t": 16, "b": 62},
+        font={"color": _TEXT, "size": 9},
+        hovermode="x unified",
+        legend={
+            "orientation": "h",
+            "yanchor": "top",
+            "y": -0.20,
+            "xanchor": "center",
+            "x": 0.5,
+            "font": {"size": 8},
+            "bgcolor": "rgba(0,0,0,0)",
+        },
+    )
+    fig.update_xaxes(
+        showgrid=False,
+        zeroline=False,
+        color=_MUTED,
+        nticks=8,
+        tickformat="%H:%M",
+    )
+    fig.update_yaxes(
+        title_text="USD EXECUTED",
+        showgrid=True,
+        gridcolor="rgba(255,255,255,0.05)",
+        zeroline=False,
+        color=_MUTED,
+    )
+    if not size:
+        fig.add_annotation(
+            text=_status_message(chart),
+            x=0.5,
+            y=0.5,
+            xref="paper",
+            yref="paper",
+            showarrow=False,
+            font={"color": _MUTED, "size": 11},
+        )
+    return fig
+
+
+def _executed_operations_card(chart: dict[str, Any]) -> html.Div:
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        "4. EXECUTED LIQUIDITY / OPERATIONS",
+                        style={"fontWeight": 700, "fontSize": "16px", "color": _TEXT},
+                    ),
+                    html.Div(
+                        "Aggregated aggressive execution interacting with available liquidity",
+                        style={"fontSize": "11px", "color": _MUTED, "marginTop": "3px"},
+                    ),
+                ],
+                style={"padding": "12px 14px 4px"},
+            ),
+            dcc.Graph(
+                id="liquidity-executed-operations",
+                figure=_executed_operations_figure(chart),
+                config={"displayModeBar": False, "responsive": True},
+                style={"height": "300px", "minHeight": "300px"},
+            ),
+        ],
+        style={**_CARD_STYLE, "marginTop": "8px"},
     )
 
 
@@ -551,6 +701,237 @@ def _event_table_card(table: dict[str, Any], fallback_title: str) -> html.Div:
     )
 
 
+
+
+# ---------- Native Screen B rendering ----------
+
+def _dt(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if isinstance(value, (int, float)):
+        return datetime.fromtimestamp(float(value), tz=timezone.utc)
+    return None
+
+
+def _analysis_records(contract: dict[str, Any]) -> list[dict[str, Any]]:
+    block = _dict(contract.get("liquidity_analysis"))
+    records = [
+        _dict(item)
+        for item in _list(block.get("records"))
+        if isinstance(item, dict) and item.get("timestamp") is not None
+    ]
+    tail = block.get("display_tail_records")
+    if isinstance(tail, int) and tail > 0:
+        records = records[-tail:]
+    return records
+
+
+def _native_line_figure(
+    records: list[dict[str, Any]],
+    series_spec: list[tuple[str, str, str]],
+    *,
+    zero_line: bool = False,
+    reference_line: float | None = None,
+    y_title: str = "",
+) -> go.Figure:
+    fig = go.Figure()
+    x = [_dt(row.get("timestamp")) for row in records]
+    for field, label, color in series_spec:
+        y = [row.get(field) for row in records]
+        fig.add_trace(
+            go.Scatter(
+                x=x,
+                y=y,
+                mode="lines",
+                name=label,
+                line={"color": color, "width": 1.55},
+                connectgaps=False,
+                hovertemplate=f"{label}: %{{y:.4f}}<extra></extra>",
+            )
+        )
+    if zero_line:
+        fig.add_hline(y=0, line_width=1, line_dash="dot", line_color="rgba(200,214,226,.50)")
+    if reference_line is not None:
+        fig.add_hline(y=reference_line, line_width=1, line_dash="dot", line_color="rgba(200,214,226,.50)")
+    fig.update_layout(
+        height=310,
+        paper_bgcolor=_BG,
+        plot_bgcolor=_BG,
+        margin={"l": 42, "r": 14, "t": 18, "b": 30},
+        font={"family": "Arial, sans-serif", "size": 8, "color": _MUTED},
+        hovermode="x unified",
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "x": 0,
+            "font": {"size": 7},
+            "bgcolor": "rgba(0,0,0,0)",
+        },
+    )
+    fig.update_xaxes(
+        showgrid=False,
+        zeroline=False,
+        linecolor="#173247",
+        tickfont={"size": 7, "color": _MUTED},
+        nticks=6,
+        tickformat="%b %d\n%H:%M",
+    )
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor="rgba(67,91,108,.22)",
+        zeroline=False,
+        linecolor="#173247",
+        tickfont={"size": 7, "color": _MUTED},
+        title_text=y_title,
+    )
+    return apply_analysis_figure_layout(fig)
+
+
+def _analysis_card(title: str, subtitle: str, figure: go.Figure) -> html.Div:
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(title, style={"fontSize": "11px", "fontWeight": 800, "color": _TEXT}),
+                    html.Div(subtitle, style={"fontSize": "8px", "color": _MUTED, "marginTop": "2px"}),
+                ],
+                style={"padding": "9px 10px 4px"},
+            ),
+            dcc.Graph(
+                figure=figure,
+                config={"displayModeBar": False, "responsive": True},
+                style={"height": "310px"},
+            ),
+        ],
+        style={**_CARD_STYLE, "minHeight": "365px"},
+    )
+
+
+def _analysis_summary(contract: dict[str, Any]) -> html.Div:
+    current = _dict(_dict(contract.get("liquidity_analysis")).get("current"))
+    items = [
+        ("REGIME", str(current.get("liquidity_regime") or "—")),
+        ("DEPTH IMBALANCE", f"{float(current.get('depth_imbalance') or 0.0):+.3f}"),
+        ("LIQUIDITY STRESS", f"{float(current.get('liquidity_stress_score') or 0.0):+.2f}"),
+        ("ABSORPTION", f"{float(current.get('absorption_index') or 0.0):+.2f}"),
+        ("WASSERSTEIN", f"{float(current.get('wasserstein_distance') or 0.0):.3f}"),
+    ]
+    return html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(label, style={"fontSize": "7px", "color": _MUTED}),
+                    html.Div(value, style={"fontSize": "12px", "fontWeight": 800, "color": _TEXT, "marginTop": "2px"}),
+                ],
+                style={"padding": "8px 10px", "borderRight": f"1px solid {_BORDER}" if i < len(items)-1 else "none"},
+            )
+            for i, (label, value) in enumerate(items)
+        ],
+        style={
+            "display": "grid",
+            "gridTemplateColumns": "2fr 1fr 1fr 1fr 1fr",
+            "background": _CARD,
+            "border": f"1px solid {_BORDER}",
+            "borderRadius": "8px",
+            "marginBottom": "8px",
+            "overflow": "hidden",
+        },
+    )
+
+
+def _analysis_view(contract: dict[str, Any]) -> html.Div:
+    records = _analysis_records(contract)
+    if not records:
+        return screen_page(
+            html.Div(
+                "LIQUIDITY SCREEN B UNAVAILABLE",
+                style={"padding": "40px", "textAlign": "center", "color": _MUTED},
+            ),
+        )
+
+    depth = _native_line_figure(
+        records,
+        [
+            ("depth_imbalance", "IMBALANCE", _CYAN),
+            ("depth_imbalance_zscore", "Z-SCORE", "#a879ff"),
+            ("bid_ask_depth_ratio", "BID/ASK RATIO", _GREEN),
+        ],
+        zero_line=True,
+    )
+    stress = _native_line_figure(
+        records,
+        [
+            ("spread_bps", "SPREAD BPS", "#f2c94c"),
+            ("market_impact_1btc_bps", "IMPACT 1 BTC", "#ff8a3d"),
+            ("liquidity_stress_score", "STRESS SCORE", _RED),
+        ],
+        zero_line=True,
+    )
+    walls = _native_line_figure(
+        records,
+        [
+            ("bid_wall_score", "BID WALL", _GREEN),
+            ("ask_wall_score", "ASK WALL", _RED),
+            ("upside_vacuum_score", "UPSIDE VACUUM", _CYAN),
+            ("downside_vacuum_score", "DOWNSIDE VACUUM", "#a879ff"),
+        ],
+    )
+    whale = _native_line_figure(
+        records,
+        [
+            ("whale_persistence_score", "PERSISTENCE", _GREEN),
+            ("cancellation_activity", "CANCELLATION", _RED),
+            ("cancellation_activity_zscore", "CANCEL Z", "#f2c94c"),
+        ],
+        zero_line=True,
+    )
+    absorption = _native_line_figure(
+        records,
+        [
+            ("buy_absorption_score", "BUY ABSORPTION", _GREEN),
+            ("sell_absorption_score", "SELL ABSORPTION", _RED),
+            ("absorption_index", "NET ABSORPTION", _CYAN),
+        ],
+        zero_line=True,
+    )
+    regime = _native_line_figure(
+        records,
+        [
+            ("liquidity_hmi_score", "LIQUIDITY HMI", _CYAN),
+            ("wasserstein_distance", "WASSERSTEIN", "#a879ff"),
+        ],
+        zero_line=True,
+    )
+    for figure, hidden_names in (
+        (depth, {"BID/ASK RATIO"}),
+        (stress, {"SPREAD BPS"}),
+        (walls, {"UPSIDE VACUUM", "DOWNSIDE VACUUM"}),
+        (whale, {"CANCEL Z"}),
+        (absorption, {"SELL ABSORPTION"}),
+    ):
+        for trace in figure.data:
+            if trace.name in hidden_names:
+                trace.visible = "legendonly"
+
+    grid = html.Div(
+        [
+            _analysis_card("DEPTH IMBALANCE / PRESSURE", "Bid/ask depth asymmetry and normalized pressure", depth),
+            _analysis_card("SPREAD × MARKET IMPACT / LIQUIDITY STRESS", "Execution friction and deterioration of available liquidity", stress),
+            _analysis_card("LIQUIDITY WALL / CONCENTRATION + VACUUM", "Resting walls and thin-book directional gaps", walls),
+            _analysis_card("WHALE PERSISTENCE / CANCELLATION ACTIVITY", "Persistence of large resting orders versus rapid withdrawal", whale),
+            _analysis_card("EXECUTED LIQUIDITY / ABSORPTION", "Aggressive flow absorbed by visible opposing liquidity", absorption),
+            _analysis_card("LIQUIDITY REGIME / HMI + WASSERSTEIN", "Composite microstructure state and regime displacement", regime),
+        ],
+        className="analysis-grid",
+    )
+
+    return screen_page(
+        _analysis_summary(contract),
+        grid,
+    )
+
+
 # ---------- Screen ----------
 
 def render(
@@ -560,16 +941,20 @@ def render(
     timeframe: str | None,
     range_id: str | None,
 ) -> html.Div:
-    if view == "reference":
-        return screen_page(screen_header(contract), reference_gallery(REFERENCE_IMAGES))
+    selected_contract = _selected_market_contract(contract, market)
 
-    charts = _dict(contract.get("charts"))
-    tables = _dict(contract.get("tables"))
+    if view == "reference":
+        return screen_page(screen_header(selected_contract), reference_gallery(REFERENCE_IMAGES))
+    if view == "analysis":
+        return _analysis_view(selected_contract)
+
+    charts = _dict(selected_contract.get("charts"))
+    tables = _dict(selected_contract.get("tables"))
 
     chart_row = html.Div(
         [
             _chart_card(
-                contract,
+                selected_contract,
                 _dict(charts.get("order_depth")),
                 1,
                 "ORDER BOOK",
@@ -577,7 +962,7 @@ def render(
                 "liquidity-order-depth",
             ),
             _chart_card(
-                contract,
+                selected_contract,
                 _dict(charts.get("whale_liquidity_profile")),
                 2,
                 "WHALE ORDERS",
@@ -585,7 +970,7 @@ def render(
                 "liquidity-whale-profile",
             ),
             _chart_card(
-                contract,
+                selected_contract,
                 _dict(charts.get("executed_liquidity_profile")),
                 3,
                 "LARGE TRADES",
@@ -607,9 +992,14 @@ def render(
         style={"gap": "8px"},
     )
 
+    executed_operations = _executed_operations_card(
+        _dict(charts.get("executed_operations"))
+    )
+
     return screen_page(
-        screen_header(contract),
-        kpi_grid(contract.get("kpis")),
+        screen_header(selected_contract),
+        kpi_grid(selected_contract.get("kpis")),
         chart_row,
         table_row,
+        executed_operations,
     )

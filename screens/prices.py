@@ -19,12 +19,14 @@ from screen_core.components import (
 )
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
+from screen_core.figures import apply_analysis_figure_layout
 
 
 ROUTE = "/prices"
 LABEL = "Prices"
-CONTRACT_FILE = "prices_screen.json"
+CONTRACT_FILE = "prices_VR1_FINAL.json"
 HAS_ANALYSIS = True
+SCREEN_REVISION = "PRICES_CVD_STYLE_ARROWS_V3"
 
 REFERENCE_IMAGES = [
     "Prices/01_Prices_A.png",
@@ -47,17 +49,17 @@ PRICE_KPI_SPEC = (
 TREND_OPTIONS = [
     {"label": "EMA 9", "value": "ema_9"},
     {"label": "EMA 21", "value": "ema_21"},
-    {"label": "EMA 50", "value": "ema_50"},
     {"label": "SMA 20", "value": "sma_20"},
     {"label": "SMA 50", "value": "sma_50"},
-    {"label": "SMA 100", "value": "sma_100"},
-    {"label": "SMA 200", "value": "sma_200"},
     {"label": "WMA 20", "value": "wma_20"},
     {"label": "WMA 50", "value": "wma_50"},
 ]
 
 BAND_OPTIONS = [
     {"label": "Bollinger Bands (20, 2)", "value": "bollinger_bands"},
+    {"label": "Fibonacci", "value": "fibonacci_levels"},
+    {"label": "Soportes", "value": "support"},
+    {"label": "Resistencias", "value": "resistance"},
     {"label": "Canal de Regresión", "value": "regression_channel"},
 ]
 
@@ -88,8 +90,8 @@ VOLUME_OPTIONS = [
     {"label": "MFI (14)", "value": "mfi"},
 ]
 
-DEFAULT_TREND = ["ema_9", "ema_21", "sma_50"]
-DEFAULT_BANDS = ["bollinger_bands"]
+DEFAULT_TREND = ["ema_9", "ema_21", "sma_20", "sma_50", "wma_20", "wma_50"]
+DEFAULT_BANDS = ["bollinger_bands", "fibonacci_levels", "support", "resistance"]
 DEFAULT_DERIVED_ANALYSIS: list[str] = []
 DEFAULT_MOMENTUM: list[str] = []
 DEFAULT_VOLATILITY: list[str] = []
@@ -98,14 +100,14 @@ DEFAULT_VOLUME = ["volume"]
 PRICE_OVERLAYS = {
     "ema_9",
     "ema_21",
-    "ema_50",
     "sma_20",
     "sma_50",
-    "sma_100",
-    "sma_200",
     "wma_20",
     "wma_50",
     "bollinger_bands",
+    "fibonacci_levels",
+    "support",
+    "resistance",
     "regression_channel",
 }
 
@@ -163,11 +165,8 @@ SERIES_LABELS = {
 TRACE_COLORS = {
     "ema_9": "#2f80ff",
     "ema_21": "#00c2ff",
-    "ema_50": "#9b51e0",
     "sma_20": "#00d4ff",
     "sma_50": "#f2c94c",
-    "sma_100": "#dc59d7",
-    "sma_200": "#ff334f",
     "wma_20": "#a879ff",
     "wma_50": "#ff8a3d",
     "macd": "#39a0ff",
@@ -421,12 +420,12 @@ PRICES_LOCAL_CSS = """
 .prices-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 152px;
+    min-height: 310px;
 }
 
 .prices-analysis-card-graph {
     min-width: 0;
-    height: 152px;
+    height: 310px;
 }
 
 .prices-analysis-card-values {
@@ -792,21 +791,6 @@ def _get_kpis(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def _get_moving_average(contract: dict[str, Any], metric_id: str) -> dict[str, Any]:
-    widgets = _safe_dict(contract.get("widgets"))
-    summary = _safe_dict(widgets.get("moving_averages_summary"))
-    values = _safe_dict(summary.get("values"))
-    value = values.get(metric_id)
-
-    return {
-        "metric_id": metric_id,
-        "value": value,
-        "unit": "quote_currency",
-        "status": summary.get("status") or ("available" if value is not None else "unavailable"),
-        "reason": summary.get("reason"),
-    }
-
-
 def _unit_label(unit: Any) -> str:
     if unit == "quote_currency":
         return "USDT"
@@ -873,18 +857,10 @@ def _metric_color(metric: dict[str, Any], tone: str) -> str:
         return "#7f8b95"
     if tone == "change":
         return _change_color(metric.get("value"))
-    if tone == "sma_100":
-        return "#dc59d7"
-    if tone == "sma_200":
-        return "#ff334f"
     return "#eef6fb"
 
 
 def _label_color(tone: str) -> str:
-    if tone == "sma_100":
-        return "#dc59d7"
-    if tone == "sma_200":
-        return "#ff334f"
     return "#9cadbb"
 
 
@@ -893,18 +869,15 @@ def _price_kpi_strip(contract: dict[str, Any]) -> html.Div:
     cells: list[html.Div] = []
 
     for index, (metric_id, label, tone) in enumerate(PRICE_KPI_SPEC):
-        if metric_id in {"sma_100", "sma_200"}:
-            metric = _get_moving_average(contract, metric_id)
-        else:
-            metric = kpis.get(
-                metric_id,
-                {
-                    "metric_id": metric_id,
-                    "value": None,
-                    "unit": None,
-                    "status": "unavailable",
-                },
-            )
+        metric = kpis.get(
+            metric_id,
+            {
+                "metric_id": metric_id,
+                "value": None,
+                "unit": None,
+                "status": "unavailable",
+            },
+        )
 
         value_color = _metric_color(metric, tone)
         cell_style = dict(KPI_CELL_STYLE)
@@ -1053,7 +1026,7 @@ def _indicator_panel() -> html.Div:
                 _checklist("prices-trend-selectors", TREND_OPTIONS, DEFAULT_TREND),
             ),
             _selector_group(
-                "BANDAS Y CANALES · SOBRE PRECIO",
+                "BANDAS, NIVELES Y CANALES · SOBRE PRECIO",
                 _checklist("prices-band-selectors", BAND_OPTIONS, DEFAULT_BANDS),
             ),
             _analysis_only_selector_group(
@@ -1270,6 +1243,108 @@ def _event_cluster_rank(event: dict[str, Any]) -> int:
         return 10**9
 
 
+def _numeric_value(value: Any) -> float | None:
+    try:
+        if isinstance(value, bool):
+            return None
+        return float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _event_anchor_timestamp(event: dict[str, Any]) -> Any:
+    display = _safe_dict(event.get("display"))
+    return (
+        event.get("event_timestamp_exact")
+        if event.get("event_timestamp_exact") is not None
+        else display.get("anchor_timestamp")
+        if display.get("anchor_timestamp") is not None
+        else event.get("timestamp")
+    )
+
+
+def _add_exact_event_arrow(
+    fig: go.Figure,
+    *,
+    x: Any,
+    y: float,
+    signal: str,
+    color: str,
+    xref: str = "x",
+    yref: str = "y",
+) -> None:
+    """Use the same arrow geometry as CVD: the arrow tip is the event point."""
+    fig.add_annotation(
+        x=_utc_datetime(_timestamp_key(x)) if _timestamp_key(x) is not None else x,
+        y=y,
+        text="",
+        showarrow=True,
+        arrowhead=2,
+        arrowsize=1.0,
+        arrowwidth=1.55,
+        arrowcolor=color,
+        ax=0,
+        ay=18 if signal == "bullish" else -18,
+        xref=xref,
+        yref=yref,
+        opacity=0.98,
+    )
+
+
+def _event_anchor_price(
+    event: dict[str, Any],
+    record: dict[str, Any] | None = None,
+) -> float | None:
+    """Resolve the exact Y coordinate for an event marker.
+
+    Priority order:
+    1) explicit contractual anchor/event price
+    2) precomputed calculation event price
+    3) midpoint of the two series involved in a technical cross
+    4) candle close/open/high/low fallback from the displayed record
+
+    This keeps the arrow exactly on the event location rather than floating
+    above or below the candle/subplot.
+    """
+
+    display = _safe_dict(event.get("display"))
+    calculation = _safe_dict(event.get("calculation"))
+
+    for candidate in (
+        event.get("event_price"),
+        display.get("anchor_price"),
+        display.get("event_price"),
+        calculation.get("event_price"),
+        calculation.get("crossing_value"),
+        calculation.get("value"),
+    ):
+        numeric_candidate = _numeric_value(candidate)
+        if numeric_candidate is not None:
+            return numeric_candidate
+
+    first_value = _numeric_value(calculation.get("first_value"))
+    second_value = _numeric_value(calculation.get("second_value"))
+
+    if first_value is not None and second_value is not None:
+        return (first_value + second_value) / 2.0
+
+    if isinstance(record, dict):
+        signal = str(event.get("signal") or "").lower()
+        if signal == "bullish":
+            fallback_order = ("close", "open", "low", "high")
+        elif signal == "bearish":
+            fallback_order = ("close", "open", "high", "low")
+        else:
+            fallback_order = ("close", "open", "high", "low")
+
+        for field_name in fallback_order:
+            numeric_candidate = _numeric_value(record.get(field_name))
+            if numeric_candidate is not None:
+                return numeric_candidate
+
+    return None
+
+
 def _select_primary_crosses(
     events: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
@@ -1377,163 +1452,37 @@ def _add_screen_a_cross_markers(
     market: str,
     timeframe: str,
 ) -> None:
-    """Place contractual bullish/bearish cross arrows on the candlesticks."""
+    """Draw CVD-style arrows whose tips sit on the exact event coordinate."""
 
-    events = _screen_a_cross_events(
-        contract,
-        market,
-        timeframe,
-        selected,
-    )
-
+    events = _screen_a_cross_events(contract, market, timeframe, selected)
     if not events:
         return
 
     records_by_timestamp: dict[int, dict[str, Any]] = {}
-
     for record in records:
         timestamp = _timestamp_key(record.get("timestamp"))
         if timestamp is not None:
             records_by_timestamp[timestamp] = record
 
-    numeric_highs = [
-        float(record["high"])
-        for record in records
-        if isinstance(record.get("high"), (int, float))
-    ]
-    numeric_lows = [
-        float(record["low"])
-        for record in records
-        if isinstance(record.get("low"), (int, float))
-    ]
-
-    if numeric_highs and numeric_lows:
-        visible_price_span = max(numeric_highs) - min(numeric_lows)
-    else:
-        visible_price_span = 0.0
-
-    minimum_offset = max(visible_price_span * 0.008, 1e-9)
-
-    marker_groups: dict[str, dict[str, list[Any]]] = {
-        "bullish": {
-            "x": [],
-            "y": [],
-            "customdata": [],
-        },
-        "bearish": {
-            "x": [],
-            "y": [],
-            "customdata": [],
-        },
-    }
-
-    # Contractual priority normally leaves one arrow per cluster.
-    # Staggering remains as a fallback for different simultaneous clusters.
-    stack_counts: dict[tuple[int, str], int] = {}
-
     for event in events:
         timestamp = _timestamp_key(event.get("timestamp"))
-
         if timestamp is None:
             continue
-
         record = records_by_timestamp.get(timestamp)
-
-        # Events outside the currently displayed candle window are ignored.
         if not record:
             continue
-
-        high = record.get("high")
-        low = record.get("low")
-
-        if not isinstance(high, (int, float)) or not isinstance(low, (int, float)):
-            continue
-
-        candle_range = abs(float(high) - float(low))
-        base_offset = max(minimum_offset, candle_range * 0.35)
-
         signal = str(event.get("signal") or "").lower()
-
         if signal not in {"bullish", "bearish"}:
             continue
-
-        group_id = signal
-        stack_key = (timestamp, group_id)
-        stack_index = stack_counts.get(stack_key, 0)
-        stack_counts[stack_key] = stack_index + 1
-
-        offset = base_offset * (1.0 + 0.72 * stack_index)
-
-        if signal == "bullish":
-            y_value = float(low) - offset
-        else:
-            y_value = float(high) + offset
-
-        calculation = _safe_dict(event.get("calculation"))
-        first_series = str(calculation.get("first_series") or "")
-        second_series = str(calculation.get("second_series") or "")
-
-        marker_groups[group_id]["x"].append(_utc_datetime(timestamp))
-        marker_groups[group_id]["y"].append(y_value)
-        marker_groups[group_id]["customdata"].append(
-            [
-                str(event.get("label") or event.get("event_id") or "Technical cross"),
-                str(event.get("event_id") or ""),
-                str(event.get("signal") or "").upper(),
-                first_series,
-                second_series,
-            ]
-        )
-
-    marker_specs = {
-        "bullish": {
-            "name": "CRUCE ALCISTA",
-            "symbol": "arrow-up",
-            "color": "#00e59b",
-        },
-        "bearish": {
-            "name": "CRUCE BAJISTA",
-            "symbol": "arrow-down",
-            "color": "#ff4d6d",
-        },
-    }
-
-    for group_id, values in marker_groups.items():
-        if not values["x"]:
+        y = _event_anchor_price(event, record)
+        if y is None:
             continue
-
-        specification = marker_specs[group_id]
-
-        fig.add_trace(
-            go.Scatter(
-                x=values["x"],
-                y=values["y"],
-                mode="markers",
-                name=specification["name"],
-                legendgroup=f"screen-a-cross-{group_id}",
-                marker={
-                    "symbol": specification["symbol"],
-                    "size": 13,
-                    "color": specification["color"],
-                    "line": {
-                        "width": 1,
-                        "color": "#03101a",
-                    },
-                },
-                customdata=values["customdata"],
-                cliponaxis=False,
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b>"
-                    "<br>Evento: %{customdata[1]}"
-                    "<br>Señal: %{customdata[2]}"
-                    "<br>Serie 1: %{customdata[3]}"
-                    "<br>Serie 2: %{customdata[4]}"
-                    "<br>%{x|%Y-%m-%d %H:%M UTC}"
-                    "<extra></extra>"
-                ),
-            ),
-            row=1,
-            col=1,
+        _add_exact_event_arrow(
+            fig,
+            x=_event_anchor_timestamp(event),
+            y=y,
+            signal=signal,
+            color="#00e59b" if signal == "bullish" else "#ff4d6d",
         )
 
 
@@ -1581,6 +1530,83 @@ def _add_aligned_line(
     )
 
 
+def _horizontal_level_items(block: dict[str, Any]) -> list[tuple[str, float]]:
+    """Return horizontal levels already packaged in the Prices contract.
+
+    Fibonacci, support and resistance are data-contract responsibilities. The
+    HMI only renders the values and never derives market levels locally.
+    """
+
+    current = _safe_dict(block.get("current"))
+    raw_levels = current.get("levels")
+    result: list[tuple[str, float]] = []
+
+    def append_value(label: Any, value: Any) -> None:
+        try:
+            result.append((str(label), float(value)))
+        except (TypeError, ValueError, OverflowError):
+            return
+
+    if isinstance(raw_levels, dict):
+        for label, value in raw_levels.items():
+            append_value(label, value)
+    elif isinstance(raw_levels, list):
+        for index, item in enumerate(raw_levels, start=1):
+            if isinstance(item, dict):
+                label = item.get("label") or item.get("id") or item.get("name") or index
+                value = item.get("value")
+                if value is None:
+                    value = item.get("level")
+                append_value(label, value)
+            else:
+                append_value(index, item)
+
+    return result
+
+
+def _fibonacci_label(raw_label: str) -> str:
+    try:
+        ratio = float(raw_label)
+    except (TypeError, ValueError):
+        return str(raw_label)
+    return f"{ratio * 100:g}%"
+
+
+def _add_contract_horizontal_levels(
+    fig: go.Figure,
+    block: dict[str, Any],
+    *,
+    display_name: str,
+    color: str,
+    unavailable: list[str],
+    label_transform: Any = None,
+) -> None:
+    status = str(block.get("status") or "").lower()
+    if not block or status in {"unavailable", "insufficient_data", "error", "missing"}:
+        unavailable.append(display_name)
+        return
+
+    levels = _horizontal_level_items(block)
+    if not levels:
+        unavailable.append(display_name)
+        return
+
+    for raw_label, value in levels:
+        label = label_transform(raw_label) if label_transform else raw_label
+        fig.add_hline(
+            y=value,
+            row=1,
+            col=1,
+            line_color=color,
+            line_dash="dot",
+            line_width=1.15 if str(raw_label) in {"0.5", "0.618"} else 0.8,
+            annotation_text=f"{display_name} {label}",
+            annotation_position="right",
+            annotation_font={"size": 7, "color": color},
+            opacity=0.78,
+        )
+
+
 def _add_price_overlays(
     fig: go.Figure,
     records_x: list[datetime | None],
@@ -1595,11 +1621,8 @@ def _add_price_overlays(
     for indicator_id in (
         "ema_9",
         "ema_21",
-        "ema_50",
         "sma_20",
         "sma_50",
-        "sma_100",
-        "sma_200",
         "wma_20",
         "wma_50",
     ):
@@ -1661,6 +1684,34 @@ def _add_price_overlays(
                 width=0.9,
                 dash="dot",
             )
+
+    if "fibonacci_levels" in selected:
+        _add_contract_horizontal_levels(
+            fig,
+            _safe_dict(overlays.get("fibonacci_levels")),
+            display_name="FIB",
+            color="#8a7dff",
+            unavailable=unavailable,
+            label_transform=_fibonacci_label,
+        )
+
+    if "support" in selected:
+        _add_contract_horizontal_levels(
+            fig,
+            _safe_dict(overlays.get("support")),
+            display_name="SOPORTE",
+            color="#00c78c",
+            unavailable=unavailable,
+        )
+
+    if "resistance" in selected:
+        _add_contract_horizontal_levels(
+            fig,
+            _safe_dict(overlays.get("resistance")),
+            display_name="RESISTENCIA",
+            color="#ff4d6d",
+            unavailable=unavailable,
+        )
 
     if "regression_channel" in selected:
         regression = _safe_dict(overlays.get("regression_channel"))
@@ -2106,6 +2157,10 @@ def build_price_figure(
     )
 
     for annotation in fig.layout.annotations:
+        # Horizontal-level labels may be normalized to the left edge, but
+        # technical-cross arrows MUST retain their exact event x/y coordinate.
+        if bool(getattr(annotation, "showarrow", False)):
+            continue
         annotation.font = {"size": 9, "color": "#8fa3b2"}
         annotation.xanchor = "left"
         annotation.x = 0
@@ -2608,10 +2663,9 @@ def _add_analysis_cross_markers(
     x: list[datetime | None],
     series: dict[str, list[Any]],
 ) -> None:
-    """Draw buy/sell arrows at contractual indicator cross events."""
+    """Draw CVD-style arrows with the arrow tip at the indicator cross value."""
 
     series_pair = ANALYSIS_CROSS_SERIES.get(indicator_id)
-
     if not series_pair:
         return
 
@@ -2619,148 +2673,38 @@ def _add_analysis_cross_markers(
     first_values = _safe_list(series.get(first_name))
     second_values = _safe_list(series.get(second_name))
     size = min(len(x), len(first_values), len(second_values))
-
     if size <= 0:
         return
 
-    current_x = x[-size:]
-    current_first = first_values[-size:]
-    current_second = second_values[-size:]
-
     point_by_timestamp: dict[int, tuple[datetime, float]] = {}
-    numeric_values: list[float] = []
-
     for current_time, first_value, second_value in zip(
-        current_x,
-        current_first,
-        current_second,
+        x[-size:], first_values[-size:], second_values[-size:]
     ):
         if current_time is None:
             continue
-
-        if not isinstance(first_value, (int, float)):
+        if not isinstance(first_value, (int, float)) or not isinstance(second_value, (int, float)):
             continue
-
-        if not isinstance(second_value, (int, float)):
-            continue
-
-        timestamp = int(current_time.timestamp())
-        crossing_value = (
-            float(first_value) + float(second_value)
-        ) / 2.0
-
-        point_by_timestamp[timestamp] = (
-            current_time,
-            crossing_value,
-        )
-        numeric_values.extend(
-            [
-                float(first_value),
-                float(second_value),
-            ]
+        point_by_timestamp[int(current_time.timestamp())] = (
+            current_time, (float(first_value) + float(second_value)) / 2.0
         )
 
-    if not point_by_timestamp:
-        return
-
-    visible_span = (
-        max(numeric_values) - min(numeric_values)
-        if numeric_values
-        else 0.0
-    )
-    marker_offset = max(visible_span * 0.035, 1e-9)
-
-    groups: dict[str, dict[str, list[Any]]] = {
-        "bullish": {
-            "x": [],
-            "y": [],
-            "customdata": [],
-        },
-        "bearish": {
-            "x": [],
-            "y": [],
-            "customdata": [],
-        },
-    }
-
-    for event in _analysis_cross_events(
-        contract,
-        indicator_id,
-        market,
-        timeframe,
-    ):
+    for event in _analysis_cross_events(contract, indicator_id, market, timeframe):
         timestamp = _timestamp_key(event.get("timestamp"))
-
         if timestamp is None or timestamp not in point_by_timestamp:
             continue
-
-        current_time, crossing_value = point_by_timestamp[timestamp]
         signal = str(event.get("signal") or "").lower()
-
-        if signal == "bullish":
-            y_value = crossing_value - marker_offset
-        elif signal == "bearish":
-            y_value = crossing_value + marker_offset
-        else:
+        if signal not in {"bullish", "bearish"}:
             continue
-
-        groups[signal]["x"].append(current_time)
-        groups[signal]["y"].append(y_value)
-        groups[signal]["customdata"].append(
-            [
-                str(
-                    event.get("label")
-                    or event.get("event_id")
-                    or "Technical cross"
-                ),
-                str(event.get("event_id") or ""),
-            ]
-        )
-
-    marker_specs = {
-        "bullish": {
-            "name": "COMPRA",
-            "symbol": "arrow-up",
-            "color": "#00e59b",
-        },
-        "bearish": {
-            "name": "VENTA",
-            "symbol": "arrow-down",
-            "color": "#ff4d6d",
-        },
-    }
-
-    for signal, values in groups.items():
-        if not values["x"]:
-            continue
-
-        specification = marker_specs[signal]
-
-        fig.add_trace(
-            go.Scatter(
-                x=values["x"],
-                y=values["y"],
-                mode="markers",
-                name=specification["name"],
-                marker={
-                    "symbol": specification["symbol"],
-                    "size": 10,
-                    "color": specification["color"],
-                    "line": {
-                        "width": 1,
-                        "color": "#04111c",
-                    },
-                },
-                customdata=values["customdata"],
-                cliponaxis=False,
-                showlegend=False,
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b>"
-                    "<br>Evento: %{customdata[1]}"
-                    "<br>%{x|%Y-%m-%d %H:%M UTC}"
-                    "<extra></extra>"
-                ),
-            )
+        _, fallback_y = point_by_timestamp[timestamp]
+        y = _event_anchor_price(event)
+        if y is None:
+            y = fallback_y
+        _add_exact_event_arrow(
+            fig,
+            x=_event_anchor_timestamp(event),
+            y=y,
+            signal=signal,
+            color="#00e59b" if signal == "bullish" else "#ff4d6d",
         )
 
 
@@ -2859,7 +2803,7 @@ def _analysis_figure(
     ]
 
     fig.update_layout(
-        height=152,
+        height=310,
         paper_bgcolor="#04111c",
         plot_bgcolor="#04111c",
         margin={"l": 30, "r": 5, "t": 6, "b": 18},
@@ -2895,7 +2839,10 @@ def _analysis_figure(
         nticks=4,
         fixedrange=True,
     )
-    return fig
+    for trace in fig.data:
+        if trace.name and trace.type in {"scatter", "bar"}:
+            trace.showlegend = True
+    return apply_analysis_figure_layout(fig)
 
 
 def _analysis_value_rows(

@@ -11,12 +11,14 @@ from screen_core.components import (
     screen_header,
     screen_page,
 )
+from screen_core.figures import apply_analysis_figure_layout
 
 
 ROUTE = "/long-short-liquidations"
 LABEL = "Liquidations"
-CONTRACT_FILE = "long_short_liquidations_screen.json"
-HAS_ANALYSIS = False
+CONTRACT_FILE = "long_short_liquidations_VR1_FINAL.json"
+HAS_ANALYSIS = True
+SCREEN_REVISION = "LIQUIDATIONS_NATIVE_B_LONG_SHORT_V1"
 
 REFERENCE_IMAGES = [
     "Liquidation/07_Long_Short_Liquidation_A.png",
@@ -130,6 +132,84 @@ LOCAL_CSS = """
     background: rgba(233,169,0,.08);
     font-size: 8px;
     font-weight: 700;
+}
+
+
+.liq-position-card {
+    min-width: 0;
+    border: 1px solid #173247;
+    border-radius: 5px;
+    background: #06111d;
+    overflow: hidden;
+}
+
+.liq-position-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.liq-analysis-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #1677ff;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #4da3ff;
+    background: #071522;
+    font-size: 8px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.liq-analysis-shell {
+    min-height: 100vh;
+    background: #06111d;
+}
+
+.liq-analysis-back-row {
+    padding: 8px 14px 0;
+}
+
+.liq-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px 14px 18px;
+}
+
+.liq-analysis-card {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #173247;
+    border-radius: 5px;
+    background: #071522;
+}
+
+.liq-analysis-card-title {
+    min-height: 28px;
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-bottom: 1px solid #173247;
+    color: #d9e8f5;
+    font-size: 9px;
+    font-weight: 700;
+}
+
+.liq-analysis-subtitle {
+    color: #7f96aa;
+    font-size: 8px;
+    padding: 0 14px 6px;
+}
+
+@media (max-width: 1100px) {
+    .liq-analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 700px) {
+    .liq-analysis-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
@@ -1188,6 +1268,215 @@ def _map_card(
     )
 
 
+def _dt(value: Any):
+    from datetime import datetime, timezone
+
+    try:
+        return datetime.fromtimestamp(float(value), tz=timezone.utc)
+    except (TypeError, ValueError, OSError, OverflowError):
+        return None
+
+
+def _long_short_positioning_figure(contract: dict[str, Any], height: int = 365) -> go.Figure:
+    chart = _safe_dict(_safe_dict(contract.get("charts")).get("long_short_positioning"))
+    points = [
+        item for item in _safe_list(chart.get("points"))
+        if isinstance(item, dict) and item.get("timestamp") is not None
+    ]
+    fig = go.Figure()
+
+    if points:
+        x = [_dt(item.get("timestamp")) for item in points]
+        series_specs = (
+            ("top_position_ratio", "TOP POSITION L/S", CYAN, 1.8),
+            ("top_account_ratio", "TOP ACCOUNT L/S", PURPLE, 1.15),
+            ("global_account_ratio", "GLOBAL ACCOUNT L/S", YELLOW, 1.15),
+        )
+        for field, name, color, width in series_specs:
+            y = [item.get(field) for item in points]
+            fig.add_trace(go.Scatter(
+                x=x, y=y, mode="lines", name=name,
+                line={"color": color, "width": width},
+                connectgaps=False,
+                hovertemplate=f"{name}: %{{y:.3f}}<extra></extra>",
+            ))
+        fig.add_hline(
+            y=1.0, line_dash="dot", line_width=1.0,
+            line_color="#8295a6", annotation_text="NEUTRAL 1.0",
+            annotation_position="right",
+            annotation_font={"size": 7, "color": MUTED},
+        )
+    else:
+        fig.add_annotation(
+            text="LONG / SHORT POSITIONING UNAVAILABLE",
+            x=.5, y=.5, xref="paper", yref="paper", showarrow=False,
+            font={"color": MUTED, "size": 10},
+        )
+
+    fig.update_layout(
+        height=height, paper_bgcolor=BG, plot_bgcolor=PLOT_BG,
+        margin={"l": 44, "r": 20, "t": 30, "b": 42},
+        font={"family": "Inter, Segoe UI, Arial, sans-serif", "size": 8, "color": TEXT},
+        hovermode="x unified",
+        legend={
+            "orientation": "h", "x": 0, "y": 1.02,
+            "xanchor": "left", "yanchor": "bottom",
+            "font": {"size": 7, "color": MUTED},
+            "bgcolor": "rgba(0,0,0,0)",
+        },
+        uirevision="liq-long-short-positioning",
+    )
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 8, "color": MUTED})
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 8, "color": MUTED}, title_text="L/S Ratio")
+    return fig
+
+
+def _positioning_card(contract: dict[str, Any], height: int = 365) -> html.Div:
+    return html.Div(
+        className="liq-position-card",
+        children=[
+            html.Div(
+                className="liq-chart-header",
+                children=[
+                    html.Div("LONG / SHORT POSITIONING", className="liq-chart-title"),
+                    html.Div(
+                        className="liq-position-actions",
+                        children=[
+                            dcc.Link("ANÁLISIS", href=f"{ROUTE}/analysis", className="liq-analysis-link"),
+                            html.A("↗", href=f"{ROUTE}/analysis", target="_blank", rel="noopener noreferrer", className="liq-analysis-link"),
+                        ],
+                    ),
+                ],
+            ),
+            dcc.Graph(
+                id="long-short-positioning-chart",
+                figure=_long_short_positioning_figure(contract, height=height),
+                config={"displaylogo": False, "responsive": True, "scrollZoom": False},
+                style={"height": f"{height}px", "minHeight": f"{height}px", "width": "100%"},
+            ),
+        ],
+    )
+
+
+ANALYSIS_LABELS = {
+    "liquidation_intensity_zscore": "LIQUIDATION INTENSITY / Z-SCORE",
+    "long_short_liquidation_imbalance": "LONG VS SHORT LIQUIDATION IMBALANCE",
+    "cascade_acceleration": "LIQUIDATION CASCADE / ACCELERATION",
+    "price_liquidation_regime": "PRICE × LIQUIDATION REGIME",
+    "crowding_liquidation_pressure": "LONG/SHORT CROWDING × LIQUIDATION PRESSURE",
+    "liquidation_regime_hmi": "LIQUIDATION REGIME / HMI",
+}
+
+ANALYSIS_ORDER = tuple(ANALYSIS_LABELS)
+
+
+def _analysis_block(contract: dict[str, Any], indicator_id: str) -> dict[str, Any]:
+    root = _safe_dict(contract.get("liquidation_analysis"))
+    return _safe_dict(_safe_dict(root.get("indicators")).get(indicator_id))
+
+
+def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 310) -> go.Figure:
+    block = _analysis_block(contract, indicator_id)
+    points = [
+        item for item in _safe_list(block.get("points"))
+        if isinstance(item, dict) and item.get("timestamp") is not None
+    ]
+    fig = go.Figure()
+    color_cycle = [CYAN, GREEN, RED, YELLOW, PURPLE, ORANGE, BLUE]
+
+    if not points:
+        fig.add_annotation(
+            text="UNAVAILABLE", x=.5, y=.5, xref="paper", yref="paper",
+            showarrow=False, font={"color": MUTED, "size": 10},
+        )
+    else:
+        x = [_dt(item.get("timestamp")) for item in points]
+        series = _safe_list(block.get("series"))
+        if not series:
+            ignored = {"timestamp", "state", "regime", "classification"}
+            fields = [k for k, v in points[-1].items() if k not in ignored and isinstance(v, (int, float))]
+            series = [{"field": field, "label": field.replace("_", " ").upper()} for field in fields[:3]]
+
+        for index, spec_raw in enumerate(series):
+            spec = _safe_dict(spec_raw)
+            field = str(spec.get("field") or "")
+            if not field:
+                continue
+            labels = {"total_liquidations_usd": "Total Liq", "total_liq_usd": "Total Liq",
+                      "total_liquidations_musd": "Total Liq", "liquidation_imbalance": "L/S Imbalance",
+                      "liquidation_regime_score": "HMI Score", "hmi_regime_score": "HMI Score",
+                      "wasserstein_distance": "Wasserstein", "capitulation_probability_pct": "Capitulation %"}
+            label = labels.get(field, str(spec.get("label") or field.replace("_", " ").title()))
+            color = str(spec.get("color") or color_cycle[index % len(color_cycle)])
+            mode = str(spec.get("mode") or "lines")
+            y = [item.get(field) for item in points]
+            if mode == "bar":
+                fig.add_trace(go.Bar(x=x, y=y, name=label, marker_color=color, opacity=.72))
+            else:
+                fig.add_trace(go.Scatter(
+                    x=x, y=y, mode="lines", name=label,
+                    line={"color": color, "width": 1.45}, connectgaps=False,
+                ))
+
+        for ref in _safe_list(block.get("reference_lines")):
+            if not isinstance(ref, dict) or not isinstance(ref.get("value"), (int, float)):
+                continue
+            fig.add_hline(
+                y=float(ref["value"]),
+                line_dash=str(ref.get("dash") or "dot"),
+                line_width=.9,
+                line_color=str(ref.get("color") or MUTED),
+            )
+
+    fig.update_layout(
+        height=height, paper_bgcolor=BG, plot_bgcolor=PLOT_BG,
+        margin={"l": 38, "r": 12, "t": 18, "b": 30},
+        font={"family": "Inter, Segoe UI, Arial, sans-serif", "size": 8, "color": TEXT},
+        hovermode="x unified",
+        legend={"orientation": "h", "x": 0, "y": 1.02, "font": {"size": 7, "color": MUTED}},
+        showlegend=True,
+        uirevision=f"liq-analysis-{indicator_id}",
+    )
+    secondary = {"crowding_liquidation_pressure": {"crowding_liquidation_score"}}
+    for trace, spec_raw in zip(fig.data, _safe_list(block.get("series"))):
+        if str(_safe_dict(spec_raw).get("field")) in secondary.get(indicator_id, set()):
+            trace.visible = "legendonly"
+    apply_analysis_figure_layout(fig)
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 7, "color": MUTED})
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 7, "color": MUTED})
+    return fig
+
+
+def _analysis_screen(contract: dict[str, Any]) -> html.Div:
+    cards = []
+    for indicator_id in ANALYSIS_ORDER:
+        cards.append(html.Div(
+            className="liq-analysis-card",
+            children=[
+                html.Div(ANALYSIS_LABELS[indicator_id], className="liq-analysis-card-title"),
+                dcc.Graph(
+                    figure=_analysis_figure(contract, indicator_id),
+                    config={"displaylogo": False, "responsive": True, "scrollZoom": False},
+                    style={"height": "310px", "width": "100%"},
+                ),
+            ],
+        ))
+
+    return html.Div(
+        className="liq-analysis-shell",
+        children=[
+            html.Div(className="liq-analysis-back-row", children=[
+                dcc.Link("← REGRESAR", href=ROUTE, className="liq-analysis-link"),
+            ]),
+            html.Div(
+                "Pantalla B nativa: liquidaciones realizadas, cascadas, crowding y régimen. Long/Short Ratio es posicionamiento; no se interpreta como liquidación realizada.",
+                className="liq-analysis-subtitle",
+            ),
+            html.Div(cards, className="liq-analysis-grid"),
+        ],
+    )
+
+
 def render(
     contract: dict[str, Any],
     view: str,
@@ -1196,6 +1485,12 @@ def render(
     range_id: str | None,
 ) -> html.Div:
     del market, timeframe, range_id
+
+    if view == "analysis":
+        return screen_page(
+            _stylesheet(),
+            _analysis_screen(contract),
+        )
 
     if view == "reference":
         return screen_page(
@@ -1222,7 +1517,7 @@ def render(
                 ),
                 height=365,
             ),
-            _side_panel(contract),
+            _positioning_card(contract, height=365),
         ],
     )
 
@@ -1252,5 +1547,6 @@ def render(
         _stylesheet(),
         screen_header(contract),
         top,
+        _side_panel(contract),
         lower,
     )

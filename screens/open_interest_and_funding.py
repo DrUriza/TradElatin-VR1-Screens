@@ -19,12 +19,14 @@ from screen_core.components import (
 )
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
+from screen_core.figures import apply_analysis_figure_layout
 
 
 ROUTE = "/open-interest-and-funding"
 LABEL = "Open Interest"
-CONTRACT_FILE = "open_interest_and_funding_screen.json"
+CONTRACT_FILE = "open_interest_and_funding_VR1_FINAL.json"
 HAS_ANALYSIS = True
+SCREEN_REVISION = "OI_NATIVE_SCREEN_B_V1"
 
 REFERENCE_IMAGES = [
     "Open Interest/03_Open_Interest_A.png",
@@ -45,11 +47,8 @@ PRICE_KPI_SPEC = (
 TREND_OPTIONS = [
     {"label": "EMA 9", "value": "ema_9"},
     {"label": "EMA 21", "value": "ema_21"},
-    {"label": "EMA 50", "value": "ema_50"},
     {"label": "SMA 20", "value": "sma_20"},
     {"label": "SMA 50", "value": "sma_50"},
-    {"label": "SMA 100", "value": "sma_100"},
-    {"label": "SMA 200", "value": "sma_200"},
     {"label": "WMA 20", "value": "wma_20"},
     {"label": "WMA 50", "value": "wma_50"},
 ]
@@ -60,44 +59,35 @@ BAND_OPTIONS = [
 ]
 
 DERIVED_ANALYSIS_OPTIONS = [
-    {"label": "ADX / DI+ / DI- (14)", "value": "adx"},
-    {"label": "Bollinger Band Width (20, 2)", "value": "bollinger_band_width"},
+    {"label": "OI ROC / Slope / Acceleration", "value": "oi_dynamics"},
+    {"label": "OI Z-Score / Percentile", "value": "oi_zscore_percentile"},
 ]
 
 MOMENTUM_OPTIONS = [
-    {"label": "MACD (12, 26, 9)", "value": "macd"},
-    {"label": "RSI (14)", "value": "rsi"},
-    {"label": "TSI (25, 13)", "value": "tsi"},
-    {"label": "Stochastic (14, 3, 3)", "value": "stochastic"},
-    {"label": "Williams %R (14)", "value": "williams_r"},
-    {"label": "CCI (20)", "value": "cci"},
+    {"label": "Price × OI Regime", "value": "price_oi_regime"},
+    {"label": "Price ↔ OI Divergence", "value": "price_oi_divergence"},
 ]
 
 VOLATILITY_OPTIONS = [
-    {"label": "ATR (14)", "value": "atr"},
-    {"label": "Wasserstein Distance", "value": "wasserstein_distance"},
+    {"label": "Funding × OI Crowding", "value": "funding_oi_crowding"},
+    {"label": "Wasserstein / Regime Shift", "value": "wasserstein_distance"},
 ]
 
-OPEN_INTEREST_OPTIONS = [
-    {"label": "OI ROC", "value": "oi_roc"},
-    {"label": "Funding Rate", "value": "funding_rate"},
-]
+# Kept as an empty hidden checklist because existing Dash callbacks consume this id.
+OPEN_INTEREST_OPTIONS: list[dict[str, str]] = []
 
-DEFAULT_TREND = ["ema_9", "ema_21", "sma_50"]
+DEFAULT_TREND = ["ema_9", "ema_21", "sma_20", "sma_50", "wma_20", "wma_50"]
 DEFAULT_BANDS = ["bollinger_bands"]
-DEFAULT_DERIVED_ANALYSIS: list[str] = []
-DEFAULT_MOMENTUM: list[str] = []
-DEFAULT_VOLATILITY: list[str] = []
+DEFAULT_DERIVED_ANALYSIS = ["oi_dynamics", "oi_zscore_percentile"]
+DEFAULT_MOMENTUM = ["price_oi_regime", "price_oi_divergence"]
+DEFAULT_VOLATILITY = ["funding_oi_crowding", "wasserstein_distance"]
 DEFAULT_OPEN_INTEREST: list[str] = []
 
 PRICE_OVERLAYS = {
     "ema_9",
     "ema_21",
-    "ema_50",
     "sma_20",
     "sma_50",
-    "sma_100",
-    "sma_200",
     "wma_20",
     "wma_50",
     "bollinger_bands",
@@ -121,65 +111,50 @@ OSCILLATOR_ORDER = (
 )
 
 INDICATOR_TITLES = {
-    "macd": "MACD (12, 26, 9)",
-    "rsi": "RSI (14)",
-    "tsi": "TSI (25, 13)",
-    "stochastic": "STOCHASTIC (14, 3, 3)",
-    "williams_r": "WILLIAMS %R (14)",
-    "cci": "CCI (20)",
-    "adx": "ADX / DI+ / DI- (14)",
-    "atr": "ATR (14)",
-    "wasserstein_distance": "WASSERSTEIN DISTANCE",
-    "bollinger_band_width": "BOLLINGER BAND WIDTH (20, 2)",
-    "oi_roc": "OI ROC",
-    "funding_rate": "FUNDING RATE",
+    "oi_dynamics": "OI ROC / SLOPE / ACCELERATION",
+    "oi_zscore_percentile": "OI Z-SCORE / PERCENTILE",
+    "price_oi_regime": "PRICE × OPEN INTEREST REGIME",
+    "price_oi_divergence": "PRICE ↔ OPEN INTEREST DIVERGENCE",
+    "funding_oi_crowding": "FUNDING × OPEN INTEREST CROWDING",
+    "wasserstein_distance": "WASSERSTEIN / REGIME SHIFT",
 }
 
 SERIES_LABELS = {
-    "macd": "MACD",
-    "signal": "SIGNAL",
-    "histogram": "HISTOGRAM",
-    "rsi": "RSI",
-    "tsi": "TSI",
-    "k": "%K",
-    "d": "%D",
-    "adx": "ADX",
-    "di_plus": "DI+",
-    "di_minus": "DI-",
-    "stochastic": "STOCHASTIC",
-    "williams_r": "WILLIAMS %R",
-    "cci": "CCI",
-    "atr": "ATR",
-    "bollinger_band_width": "BBW",
-    "oi_roc": "OI ROC",
-    "funding_rate": "FUNDING RATE",
+    "oi_roc": "OI ROC %",
+    "oi_slope_pct": "OI SLOPE %",
+    "oi_acceleration_pct": "OI ACCELERATION %",
+    "oi_zscore": "OI Z-SCORE",
+    "oi_percentile": "OI PERCENTILE",
+    "regime_score": "REGIME SCORE",
+    "price_return_z": "PRICE RETURN Z",
+    "oi_change_z": "OI CHANGE Z",
+    "divergence_score": "DIVERGENCE SCORE",
+    "funding_zscore": "FUNDING Z",
+    "crowding_score": "CROWDING SCORE",
+    "wasserstein_distance": "WASSERSTEIN",
     "value": "VALUE",
 }
 
 TRACE_COLORS = {
     "ema_9": "#2f80ff",
     "ema_21": "#00c2ff",
-    "ema_50": "#9b51e0",
     "sma_20": "#00d4ff",
     "sma_50": "#f2c94c",
-    "sma_100": "#dc59d7",
-    "sma_200": "#ff334f",
     "wma_20": "#a879ff",
     "wma_50": "#ff8a3d",
-    "macd": "#39a0ff",
-    "signal": "#f2c94c",
-    "histogram": "#7b8fa3",
-    "rsi": "#38d9a9",
-    "tsi": "#b57cff",
-    "k": "#2f80ff",
-    "d": "#f2994a",
-    "williams_r": "#56ccf2",
-    "cci": "#bb6bd9",
-    "atr": "#f2c94c",
-    "wasserstein_distance": "#eb5757",
     "oi_roc": "#22c7e8",
-    "funding_rate": "#00e59b",
-    "value": "#eb5757",
+    "oi_slope_pct": "#00e59b",
+    "oi_acceleration_pct": "#f2c94c",
+    "oi_zscore": "#22c7e8",
+    "oi_percentile": "#a879ff",
+    "regime_score": "#00e59b",
+    "price_return_z": "#2f80ff",
+    "oi_change_z": "#f2c94c",
+    "divergence_score": "#ff4d6d",
+    "funding_zscore": "#a879ff",
+    "crowding_score": "#ff8a3d",
+    "wasserstein_distance": "#3c94ed",
+    "value": "#3c94ed",
 }
 
 
@@ -433,12 +408,12 @@ OPEN_INTEREST_LOCAL_CSS = """
 .oi-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 152px;
+    min-height: 310px;
 }
 
 .oi-analysis-card-graph {
     min-width: 0;
-    height: 152px;
+    height: 310px;
 }
 
 .oi-analysis-card-values {
@@ -885,18 +860,10 @@ def _metric_color(metric: dict[str, Any], tone: str) -> str:
         return "#7f8b95"
     if tone == "change":
         return _change_color(metric.get("value"))
-    if tone == "sma_100":
-        return "#dc59d7"
-    if tone == "sma_200":
-        return "#ff334f"
     return "#eef6fb"
 
 
 def _label_color(tone: str) -> str:
-    if tone == "sma_100":
-        return "#dc59d7"
-    if tone == "sma_200":
-        return "#ff334f"
     return "#9cadbb"
 
 
@@ -905,18 +872,15 @@ def _open_interest_kpi_strip(contract: dict[str, Any]) -> html.Div:
     cells: list[html.Div] = []
 
     for index, (metric_id, label, tone) in enumerate(PRICE_KPI_SPEC):
-        if metric_id in {"sma_100", "sma_200"}:
-            metric = _get_moving_average(contract, metric_id)
-        else:
-            metric = kpis.get(
-                metric_id,
-                {
-                    "metric_id": metric_id,
-                    "value": None,
-                    "unit": None,
-                    "status": "unavailable",
-                },
-            )
+        metric = kpis.get(
+            metric_id,
+            {
+                "metric_id": metric_id,
+                "value": None,
+                "unit": None,
+                "status": "unavailable",
+            },
+        )
 
         value_color = _metric_color(metric, tone)
         cell_style = dict(KPI_CELL_STYLE)
@@ -1068,24 +1032,25 @@ def _indicator_panel() -> html.Div:
                 "BANDAS Y CANALES · SOBRE OPEN INTEREST",
                 _checklist("oi-band-selectors", BAND_OPTIONS, DEFAULT_BANDS),
             ),
-            _analysis_only_selector_group(
+            _selector_group(
+                "DINÁMICA DE PARTICIPACIÓN · PANTALLA B",
                 _checklist(
                     "oi-derived-selectors",
                     DERIVED_ANALYSIS_OPTIONS,
                     DEFAULT_DERIVED_ANALYSIS,
-                )
+                ),
             ),
             _selector_group(
-                "MOMENTUM · PANTALLA B",
+                "PRICE × PARTICIPACIÓN · PANTALLA B",
                 _checklist("oi-momentum-selectors", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
             ),
             _selector_group(
-                "VOLATILIDAD · PANTALLA B",
+                "LEVERAGE / CAMBIO DE RÉGIMEN · PANTALLA B",
                 _checklist("oi-volatility-selectors", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
             ),
-            _selector_group(
-                "OPEN INTEREST · PANTALLA B",
+            html.Div(
                 _checklist("oi-native-selectors", OPEN_INTEREST_OPTIONS, DEFAULT_OPEN_INTEREST),
+                style={"display": "none"},
             ),
         ],
     )
@@ -1383,7 +1348,7 @@ def _screen_a_cross_events(
     return _select_primary_crosses(eligible)
 
 
-def _add_screen_a_cross_markers(
+def _add_screen_a_cross_markers_legacy(
     fig: go.Figure,
     contract: dict[str, Any],
     records: list[dict[str, Any]],
@@ -1502,12 +1467,12 @@ def _add_screen_a_cross_markers(
     marker_specs = {
         "bullish": {
             "name": "CRUCE ALCISTA",
-            "symbol": "arrow-up",
+            "symbol": "circle",
             "color": "#00e59b",
         },
         "bearish": {
             "name": "CRUCE BAJISTA",
-            "symbol": "arrow-down",
+            "symbol": "circle",
             "color": "#ff4d6d",
         },
     }
@@ -1595,6 +1560,51 @@ def _add_aligned_line(
     )
 
 
+def _add_screen_a_cross_markers(
+    fig: go.Figure,
+    contract: dict[str, Any],
+    records: list[dict[str, Any]],
+    selected: set[str],
+    market: str,
+    timeframe: str,
+) -> None:
+    """Draw CVD-style arrows whose tips use exact contractual coordinates."""
+    del records
+    for event in _screen_a_cross_events(contract, market, timeframe, selected):
+        signal = str(event.get("signal") or "").lower()
+        timestamp_exact = event.get("event_timestamp_exact")
+        value_exact = event.get("event_value_exact")
+        display = _safe_dict(event.get("display"))
+        anchor_price = display.get("anchor_price")
+
+        if signal not in {"bullish", "bearish"} or timestamp_exact is None:
+            continue
+        if not isinstance(value_exact, (int, float)):
+            continue
+
+        y_value = (
+            float(anchor_price)
+            if isinstance(anchor_price, (int, float))
+            else float(value_exact)
+        )
+        fig.add_annotation(
+            x=_utc_datetime(timestamp_exact),
+            y=y_value,
+            text="",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1.0,
+            arrowwidth=1.55,
+            arrowcolor="#00e59b" if signal == "bullish" else "#ff4d6d",
+            ax=0,
+            ay=18 if signal == "bullish" else -18,
+            xref="x",
+            yref="y",
+            row=1,
+            col=1,
+        )
+
+
 def _add_price_overlays(
     fig: go.Figure,
     records_x: list[datetime | None],
@@ -1609,11 +1619,8 @@ def _add_price_overlays(
     for indicator_id in (
         "ema_9",
         "ema_21",
-        "ema_50",
         "sma_20",
         "sma_50",
-        "sma_100",
-        "sma_200",
         "wma_20",
         "wma_50",
     ):
@@ -1974,98 +1981,64 @@ SELECTION_STORE_ID = "oi-selection-store"
 ANALYSIS_CONTENT_ID = "oi-analysis-content"
 
 ANALYSIS_GRAPH_ORDER = (
-    "macd",
-    "rsi",
-    "tsi",
-    "adx",
-    "stochastic",
-    "williams_r",
-    "cci",
-    "atr",
+    "oi_dynamics",
+    "oi_zscore_percentile",
+    "price_oi_regime",
+    "price_oi_divergence",
+    "funding_oi_crowding",
     "wasserstein_distance",
-    "bollinger_band_width",
-    "oi_roc",
-    "funding_rate",
 )
 
 ANALYSIS_CARD_NUMBERS = {
-    "macd": 1,
-    "rsi": 2,
-    "tsi": 3,
-    "adx": 4,
-    "stochastic": 5,
-    "williams_r": 6,
-    "cci": 7,
-    "atr": 8,
-    "wasserstein_distance": 9,
-    "bollinger_band_width": 10,
-    "oi_roc": 11,
-    "funding_rate": 12,
+    "oi_dynamics": 1,
+    "oi_zscore_percentile": 2,
+    "price_oi_regime": 3,
+    "price_oi_divergence": 4,
+    "funding_oi_crowding": 5,
+    "wasserstein_distance": 6,
 }
 
 SUMMARY_SECTIONS = (
-    ("TENDENCIA", "#00e59b", ("macd", "adx")),
-    ("MOMENTUM", "#d653ff", ("rsi", "tsi", "stochastic", "williams_r", "cci")),
-    ("VOLATILIDAD", "#ffab00", ("atr", "bollinger_band_width")),
-    ("DISTRIBUCIÓN", "#22c7e8", ("wasserstein_distance",)),
-    ("OPEN INTEREST", "#22c7e8", ("oi_roc", "funding_rate")),
+    ("DINÁMICA DE PARTICIPACIÓN", "#22c7e8", ("oi_dynamics", "oi_zscore_percentile")),
+    ("PRICE × PARTICIPACIÓN", "#00e59b", ("price_oi_regime", "price_oi_divergence")),
+    ("LEVERAGE / CROWDING", "#ffab00", ("funding_oi_crowding",)),
+    ("CAMBIO DE RÉGIMEN", "#a879ff", ("wasserstein_distance",)),
 )
 
 SUMMARY_LABELS = {
-    "macd": "MACD (12,26,9)",
-    "adx": "ADX (14)",
-    "rsi": "RSI (14)",
-    "tsi": "TSI (25,13)",
-    "stochastic": "ESTOCÁSTICO (14,3,3)",
-    "williams_r": "WILLIAMS %R (14)",
-    "cci": "CCI (20)",
-    "atr": "ATR (14)",
-    "bollinger_band_width": "BOLLINGER BAND WIDTH (20,2)",
-    "wasserstein_distance": "WASSERSTEIN DISTANCE",
-    "oi_roc": "OI ROC",
-    "funding_rate": "FUNDING RATE",
+    "oi_dynamics": "OI ROC / SLOPE / ACCEL.",
+    "oi_zscore_percentile": "OI Z-SCORE / PERCENTILE",
+    "price_oi_regime": "PRICE × OI REGIME",
+    "price_oi_divergence": "PRICE ↔ OI DIVERGENCE",
+    "funding_oi_crowding": "FUNDING × OI CROWDING",
+    "wasserstein_distance": "WASSERSTEIN / REGIME SHIFT",
 }
 
 ANALYSIS_LINE_COLORS = {
-    "macd": "#0788e8",
-    "signal": "#ff5d00",
-    "rsi": "#b45bea",
-    "tsi": "#1ed1dd",
-    "adx": "#d3c2a8",
-    "di_plus": "#20d05c",
-    "di_minus": "#ff273b",
-    "k": "#008fff",
-    "d": "#ff6a00",
-    "williams_r": "#b64fe6",
-    "cci": "#14c8dc",
-    "atr": "#ff9f00",
-    "wasserstein_distance": "#3c94ed",
-    "bollinger_band_width": "#17c8ce",
+    "oi_dynamics": "#22c7e8",
     "oi_roc": "#22c7e8",
-    "funding_rate": "#00e59b",
+    "oi_slope_pct": "#00e59b",
+    "oi_acceleration_pct": "#f2c94c",
+    "oi_zscore_percentile": "#22c7e8",
+    "oi_zscore": "#22c7e8",
+    "oi_percentile": "#a879ff",
+    "price_oi_regime": "#00e59b",
+    "regime_score": "#00e59b",
+    "price_oi_divergence": "#ff4d6d",
+    "price_return_z": "#2f80ff",
+    "oi_change_z": "#f2c94c",
+    "divergence_score": "#ff4d6d",
+    "funding_oi_crowding": "#ff8a3d",
+    "funding_zscore": "#a879ff",
+    "crowding_score": "#ff8a3d",
+    "wasserstein_distance": "#3c94ed",
     "value": "#3c94ed",
 }
 
-ANALYSIS_CROSS_EVENT_IDS = {
-    "macd": {
-        "macd_above_signal",
-        "macd_below_signal",
-    },
-    "stochastic": {
-        "k_above_d",
-        "k_below_d",
-    },
-    "adx": {
-        "di_plus_above_di_minus",
-        "di_plus_below_di_minus",
-    },
-}
 
-ANALYSIS_CROSS_SERIES = {
-    "macd": ("macd", "signal"),
-    "stochastic": ("k", "d"),
-    "adx": ("di_plus", "di_minus"),
-}
+ANALYSIS_CROSS_EVENT_IDS: dict[str, set[str]] = {}
+ANALYSIS_CROSS_SERIES: dict[str, tuple[str, str]] = {}
+
 
 
 def _default_selection_payload() -> dict[str, list[str]]:
@@ -2276,6 +2249,23 @@ def _format_analysis_number(value: Any) -> str:
 def _signal_descriptor(row: dict[str, Any], panel: dict[str, Any], indicator_id: str) -> tuple[str, str]:
     signal = str(row.get("signal") or "").lower()
     state = str(row.get("state") or row.get("display_signal") or "").lower()
+
+    native_states = {
+        "expanding": ("EXPANSIÓN", "#00e59b"),
+        "contracting": ("CONTRACCIÓN", "#ffab00"),
+        "bullish_expansion": ("EXPANSIÓN ALCISTA", "#00e59b"),
+        "bearish_expansion": ("EXPANSIÓN BAJISTA", "#ff4d6d"),
+        "short_covering": ("SHORT COVERING", "#2f80ff"),
+        "long_liquidation": ("LONG DELEVERAGING", "#ff8a3d"),
+        "long_crowding": ("LONG CROWDING", "#ff8a3d"),
+        "short_crowding": ("SHORT CROWDING", "#a879ff"),
+        "divergence": ("DIVERGENCIA", "#ff4d6d"),
+        "confirmation": ("CONFIRMACIÓN", "#00e59b"),
+        "regime_shift": ("REGIME SHIFT", "#ff4d6d"),
+        "normal": ("NORMAL", "#22c7e8"),
+    }
+    if indicator_id in ANALYSIS_GRAPH_ORDER and state in native_states:
+        return native_states[state]
 
     if indicator_id == "adx" and state in {"strong", "very_strong", "developing"}:
         return "TENDENCIA", "#20d05c"
@@ -2576,7 +2566,12 @@ def _analysis_figure(
     timeframe: str,
 ) -> go.Figure:
     x, series = _analysis_series(panel)
-    fig = go.Figure()
+    use_secondary_percentile_axis = indicator_id == "oi_zscore_percentile"
+    fig = (
+        make_subplots(specs=[[{"secondary_y": True}]])
+        if use_secondary_percentile_axis
+        else go.Figure()
+    )
 
     for index, (series_name, values) in enumerate(series.items()):
         size = min(len(x), len(values))
@@ -2603,20 +2598,22 @@ def _analysis_figure(
             continue
 
         color_key = series_name if series_name in ANALYSIS_LINE_COLORS else indicator_id
-        fig.add_trace(
-            go.Scatter(
-                x=current_x,
-                y=current_y,
-                mode="lines",
-                line={
-                    "color": ANALYSIS_LINE_COLORS.get(color_key, "#22c7e8"),
-                    "width": 1.25,
-                },
-                connectgaps=False,
-                hovertemplate=f"{SERIES_LABELS.get(series_name, series_name.upper())}: %{{y:.5f}}<extra></extra>",
-                showlegend=False,
-            )
+        trace = go.Scatter(
+            x=current_x,
+            y=current_y,
+            mode="lines",
+            line={
+                "color": ANALYSIS_LINE_COLORS.get(color_key, "#22c7e8"),
+                "width": 1.25,
+            },
+            connectgaps=False,
+            hovertemplate=f"{SERIES_LABELS.get(series_name, series_name.upper())}: %{{y:.5f}}<extra></extra>",
+            showlegend=False,
         )
+        if use_secondary_percentile_axis:
+            fig.add_trace(trace, secondary_y=(series_name == "oi_percentile"))
+        else:
+            fig.add_trace(trace)
 
     for reference_line in _analysis_reference_lines(
         contract,
@@ -2663,7 +2660,7 @@ def _analysis_figure(
     ]
 
     fig.update_layout(
-        height=152,
+        height=310,
         paper_bgcolor="#04111c",
         plot_bgcolor="#04111c",
         margin={"l": 30, "r": 5, "t": 6, "b": 18},
@@ -2699,7 +2696,19 @@ def _analysis_figure(
         nticks=4,
         fixedrange=True,
     )
-    return fig
+    if indicator_id == "oi_zscore_percentile":
+        fig.update_yaxes(range=[0, 100], secondary_y=True, showgrid=False, nticks=5)
+    if indicator_id == "price_oi_regime":
+        fig.update_yaxes(
+            tickmode="array",
+            tickvals=[-2, -1, 0, 1, 2],
+            ticktext=["BEAR EXP.", "LONG DELEV.", "NEUTRAL", "SHORT COVER", "BULL EXP."],
+            range=[-2.4, 2.4],
+        )
+    for trace in fig.data:
+        if trace.name and trace.type in {"scatter", "bar"}:
+            trace.showlegend = True
+    return apply_analysis_figure_layout(fig, right_margin=42)
 
 
 def _analysis_value_rows(
@@ -2713,35 +2722,39 @@ def _analysis_value_rows(
     signal_text, signal_color = _signal_descriptor(row, panel, indicator_id)
 
     values: list[tuple[str, Any, str]] = []
-    if indicator_id == "macd":
+    if indicator_id == "oi_dynamics":
         values = [
-            ("MACD", primary_value, "#20d05c"),
-            ("SIGNAL", secondary.get("signal"), "#ff9f00"),
-            ("HISTOGRAMA", secondary.get("histogram"), "#20d05c"),
+            ("OI ROC %", primary_value, ANALYSIS_LINE_COLORS["oi_roc"]),
+            ("SLOPE %", secondary.get("oi_slope_pct"), ANALYSIS_LINE_COLORS["oi_slope_pct"]),
+            ("ACCEL %", secondary.get("oi_acceleration_pct"), ANALYSIS_LINE_COLORS["oi_acceleration_pct"]),
         ]
-    elif indicator_id == "adx":
+    elif indicator_id == "oi_zscore_percentile":
         values = [
-            ("ADX", primary_value, "#d3c2a8"),
-            ("DI+", secondary.get("di_plus"), "#20d05c"),
-            ("DI-", secondary.get("di_minus"), "#ff273b"),
+            ("OI Z-SCORE", primary_value, ANALYSIS_LINE_COLORS["oi_zscore"]),
+            ("PERCENTILE", secondary.get("oi_percentile"), ANALYSIS_LINE_COLORS["oi_percentile"]),
         ]
-    elif indicator_id == "stochastic":
+    elif indicator_id == "price_oi_regime":
         values = [
-            ("%K", primary_value, "#2d8cff"),
-            ("%D", secondary.get("d"), "#ff9f00"),
+            ("REGIME SCORE", primary_value, ANALYSIS_LINE_COLORS["regime_score"]),
+            ("ESTADO", secondary.get("regime_state"), "#e4edf4"),
         ]
-    elif indicator_id == "bollinger_band_width":
+    elif indicator_id == "price_oi_divergence":
         values = [
-            (
-                "BBW",
-                primary_value,
-                ANALYSIS_LINE_COLORS["bollinger_band_width"],
-            )
+            ("DIVERGENCE", primary_value, ANALYSIS_LINE_COLORS["divergence_score"]),
+            ("PRICE Z", secondary.get("price_return_z"), ANALYSIS_LINE_COLORS["price_return_z"]),
+            ("OI Z", secondary.get("oi_change_z"), ANALYSIS_LINE_COLORS["oi_change_z"]),
+        ]
+    elif indicator_id == "funding_oi_crowding":
+        values = [
+            ("CROWDING", primary_value, ANALYSIS_LINE_COLORS["crowding_score"]),
+            ("FUNDING Z", secondary.get("funding_zscore"), ANALYSIS_LINE_COLORS["funding_zscore"]),
+            ("OI Z", secondary.get("oi_zscore"), ANALYSIS_LINE_COLORS["oi_zscore"]),
         ]
     else:
         values = [
             (SERIES_LABELS.get(indicator_id, indicator_id.upper()), primary_value, ANALYSIS_LINE_COLORS.get(indicator_id, "#22c7e8"))
         ]
+
 
     children: list[html.Div] = []
     for label, value, color in values:
@@ -2945,7 +2958,7 @@ def build_analysis_screen(
         )
     else:
         chart_area = html.Div(
-            "No seleccionaste indicadores para la Pantalla B. Regresa a la Pantalla A, marca ADX, Momentum, Volatilidad, Open Interest o Bollinger Band Width y presiona ANÁLISIS TÉCNICO FUNDAMENTAL.",
+            "No seleccionaste métricas para la Pantalla B. Regresa a la Pantalla A, selecciona Dinámica, Price × Participación, Crowding o Regime Shift y abre el análisis.",
             className="oi-analysis-empty",
         )
 
