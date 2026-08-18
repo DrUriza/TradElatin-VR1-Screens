@@ -15,6 +15,8 @@ from screen_core.components import (
     screen_header,
     screen_page,
 )
+from screen_core.contextual_help import contextual_help_label
+from screen_core.i18n import current_locale, locale_context, localize_component_tree, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.figures import apply_analysis_figure_layout
 
@@ -500,8 +502,7 @@ def _group(
         children.append(
             html.Div(
                 (
-                    "Gráfica independiente en Pantalla B; "
-                    "no se superpone a Exchange Balance."
+                    "Independent chart on Screen B; it is not overlaid on Exchange Balance."
                 ),
                 className="etf-note",
             )
@@ -533,8 +534,8 @@ def _selector_panel() -> html.Div:
                 },
                 children=[
                     dcc.Link(
-                        "ANÁLISIS DE FLUJOS Y CAPITAL",
-                        href=f"{ROUTE}/analysis",
+                        "FLOW & CAPITAL ANALYSIS",
+                        href=localized_href(f"{ROUTE}/analysis"),
                         className="etf-button",
                         style={
                             "display": "flex",
@@ -547,10 +548,10 @@ def _selector_panel() -> html.Div:
                     ),
                     html.A(
                         "↗",
-                        href=f"{ROUTE}/analysis",
+                        href=localized_href(f"{ROUTE}/analysis"),
                         target="_blank",
                         rel="noopener noreferrer",
-                        title="Abrir análisis en una nueva pestaña",
+                        title="Open analysis in a new tab",
                         className="etf-button",
                         style={
                             "display": "flex",
@@ -572,29 +573,28 @@ def _selector_panel() -> html.Div:
                 ],
             ),
             html.Div(
-                "ETF & EXCHANGE FLOWS · PANTALLA B",
+                "ETF & EXCHANGE FLOWS · SCREEN B",
                 className="etf-heading",
             ),
             html.Div(
                 (
-                    "Analítica nativa de movimiento de capital. "
-                    "La HMI sólo grafica métricas precomputadas por Processing; "
-                    "no aplica RSI/MACD/ATR ni medias móviles a reservas o flujos."
+                    "Native capital-flow analytics. The HMI only plots metrics precomputed by Processing; "
+                    "it does not apply RSI/MACD/ATR or moving averages to reserves or flows."
                 ),
                 className="etf-note",
             ),
             _group(
-                "INSTITUTIONAL FLOW · PANTALLA B",
+                "INSTITUTIONAL FLOW · SCREEN B",
                 _checklist("etf-derived", DERIVED_OPTIONS, DEFAULT_DERIVED),
                 analysis_only=True,
             ),
             _group(
-                "PRICE & EXCHANGE CAPITAL · PANTALLA B",
+                "PRICE & EXCHANGE CAPITAL · SCREEN B",
                 _checklist("etf-momentum", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
                 analysis_only=True,
             ),
             _group(
-                "CAPITAL REGIME · PANTALLA B",
+                "CAPITAL REGIME · SCREEN B",
                 _checklist("etf-volatility", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
                 analysis_only=True,
             ),
@@ -862,7 +862,7 @@ def _etf_strength_dots(count: Any, color: str) -> html.Span:
 def _etf_summary_panel(
     block: dict[str, Any],
     selected_ids: list[str],
-    title: str = "RESUMEN DE FLUJOS Y CAPITAL",
+    title: str = "FLOW & CAPITAL SUMMARY",
 ) -> html.Div:
     indicators = _safe_dict(block.get("indicators"))
     chosen = [
@@ -875,10 +875,10 @@ def _etf_summary_panel(
         html.Div(
             className="etf-summary-head",
             children=[
-                html.Span("MÉTRICA"),
-                html.Span("VALOR", style={"textAlign": "right"}),
-                html.Span("ESTADO", style={"textAlign": "right"}),
-                html.Span("FUERZA", style={"textAlign": "right"}),
+                html.Span("METRIC"),
+                html.Span("VALUE", style={"textAlign": "right"}),
+                html.Span("STATE", style={"textAlign": "right"}),
+                html.Span("STRENGTH", style={"textAlign": "right"}),
             ],
         )
     ]
@@ -943,17 +943,17 @@ def _etf_summary_panel(
 
 def _etf_strength_legend() -> html.Div:
     rows = (
-        ("MUY FUERTE", 5, "#20d05c"),
-        ("FUERTE", 4, "#20d05c"),
-        ("MODERADA", 3, "#ffab00"),
-        ("DÉBIL", 2, "#ff8a00"),
-        ("MUY DÉBIL", 1, "#ff3d55"),
+        ("VERY STRONG", 5, "#20d05c"),
+        ("STRONG", 4, "#20d05c"),
+        ("MODERATE", 3, "#ffab00"),
+        ("WEAK", 2, "#ff8a00"),
+        ("VERY WEAK", 1, "#ff3d55"),
     )
 
     return html.Div(
         className="etf-strength-legend",
         children=[
-            html.Div("LEYENDA FUERZA", className="etf-strength-title"),
+            html.Div("STRENGTH LEGEND", className="etf-strength-title"),
             html.Div(
                 className="etf-strength-body",
                 children=[
@@ -986,8 +986,8 @@ def _analysis_screen(
                     html.Div(
                             children=[
                                 dcc.Link(
-                                    "← REGRESAR",
-                                    href=ROUTE,
+                                    "← BACK",
+                                    href=localized_href(ROUTE),
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
@@ -1003,8 +1003,8 @@ def _analysis_screen(
             ),
                 html.Div(
                     (
-                        "No seleccionaste indicadores "
-                        "de Pantalla B."
+                        "No indicators selected "
+                        "for Screen B."
                     ),
                     className="contract-warning",
                 ),
@@ -1019,12 +1019,13 @@ def _analysis_screen(
                 className="etf-analysis-card",
                 children=[
                     html.Div(
-                        INDICATOR_LABELS[
-                            indicator_id
-                        ],
-                        className=(
-                            "etf-analysis-card-title"
+                        contextual_help_label(
+                            INDICATOR_LABELS[indicator_id],
+                            family="etf",
+                            section="screen_b",
+                            key=indicator_id,
                         ),
+                        className="etf-analysis-card-title",
                     ),
                     dcc.Graph(
                         figure=_indicator_figure(
@@ -1054,8 +1055,8 @@ def _analysis_screen(
                     html.Div(
                             children=[
                                 dcc.Link(
-                                    "← REGRESAR",
-                                    href=ROUTE,
+                                    "← BACK",
+                                    href=localized_href(ROUTE),
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
@@ -1164,20 +1165,27 @@ def persist_selection(
         "n_clicks",
     ),
     Input("range-selector", "value"),
+    Input("url", "search"),
     prevent_initial_call=False,
 )
 def update_analysis(
     selection: Any,
     _reload: int | None,
     range_id: str | None,
+    search: str | None,
 ):
+    locale = locale_from_search(search)
     contract = load_contract(CONTRACT_FILE)
 
-    return _analysis_screen(
-        contract,
-        selection or _default_selection(),
-        range_id,
-    )
+    with locale_context(locale):
+        return localize_component_tree(
+            _analysis_screen(
+                contract,
+                selection or _default_selection(),
+                range_id,
+            ),
+            locale,
+        )
 
 
 def render(
@@ -1233,8 +1241,13 @@ def render(
                     range_id,
                 ),
                 chart_id="etf-flow-daily",
+                title="ETF Daily Net Flow",
                 range_id=range_id,
                 height=291,
+                help_family="etf",
+                help_section="screen_a",
+                help_key="etf_flow_daily",
+                show_card_title=True,
             ),
             data_table_card(
                 tables.get("etf_funds"),
@@ -1243,6 +1256,8 @@ def render(
                     "ETF Flow by Provider"
                 ),
                 max_rows=10,
+                help_family="etf",
+                help_section="screen_a",
             ),
             graph_card(
                 _filtered_point_chart(
@@ -1252,12 +1267,26 @@ def render(
                 chart_id=(
                     "exchange-net-flow"
                 ),
+                title="Exchange Net Flow",
                 range_id=range_id,
                 height=291,
+                help_family="etf",
+                help_section="screen_a",
+                help_key="exchange_net_flow",
+                show_card_title=True,
             ),
             html.Div(
                 className="etf-card",
                 children=[
+                    html.Div(
+                        contextual_help_label(
+                            "Exchange Balance / Reserve",
+                            family="etf",
+                            section="screen_a",
+                            key="exchange_balance",
+                        ),
+                        className="panel-title",
+                    ),
                     dcc.Graph(
                         id=(
                             "etf-exchange-balance"
@@ -1293,7 +1322,7 @@ def render(
         ),
         screen_header(contract),
         kpi_grid(
-            contract.get("kpis")
+            contract.get("kpis"), help_family="etf"
         ),
         html.Div(
             className="etf-main-grid",

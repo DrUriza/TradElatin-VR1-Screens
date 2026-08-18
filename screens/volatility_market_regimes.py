@@ -8,6 +8,8 @@ import plotly.graph_objects as go
 from dash import Input, Output, callback, dcc, html
 
 from screen_core.components import kpi_grid, reference_gallery, screen_header, screen_page
+from screen_core.contextual_help import contextual_help_label
+from screen_core.i18n import current_locale, locale_context, localize_component_tree, localized_href, locale_from_search
 from screen_core.figures import apply_analysis_figure_layout
 
 ROUTE = "/volatility-market-regimes"
@@ -48,9 +50,10 @@ ANALYSIS_ORDER = [
 
 CSS = """
 .vol-native-main {display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:8px;align-items:start;}
-.vol-native-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
-.vol-native-card {border:1px solid #173247;background:#06111d;min-width:0;}
-.vol-native-panel {border:1px solid #173247;background:#06111d;padding:10px;min-height:588px;}
+.vol-native-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,318px);gap:8px;align-items:stretch;}
+.vol-native-card {border:1px solid #173247;background:#06111d;min-width:0;min-height:318px;height:318px;display:flex;flex-direction:column;overflow:hidden;}
+.vol-native-card .dash-graph {flex:1 1 auto;min-height:291px;height:291px;width:100%;}
+.vol-native-panel {border:1px solid #173247;background:#06111d;padding:10px;min-height:644px;}
 .vol-native-panel h3 {font-size:11px;color:#57a8ff;margin:0 0 8px;text-transform:uppercase;}
 .vol-native-section {border-top:1px solid #173247;padding-top:8px;margin-top:8px;}
 .vol-native-label {font-size:8px;color:#718da3;text-transform:uppercase;margin-bottom:5px;}
@@ -62,7 +65,7 @@ CSS = """
 .vol-analysis-title {height:26px;display:flex;align-items:center;padding:0 8px;font-size:8px;color:#8cb3d2;border-bottom:1px solid #173247;text-transform:uppercase;}
 .vol-analysis-back {display:inline-block;border:1px solid #2f80ff;color:#62afff;text-decoration:none;padding:6px 12px;font-size:9px;font-weight:700;margin-bottom:8px;}
 @media (max-width:1100px){.vol-native-main{grid-template-columns:1fr}.vol-native-panel{min-height:auto}.vol-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width:760px){.vol-native-grid,.vol-analysis-grid{grid-template-columns:1fr}}
+@media (max-width:760px){.vol-native-grid,.vol-analysis-grid{grid-template-columns:1fr}.vol-native-grid{grid-template-rows:none}.vol-native-card{height:318px;min-height:318px;}}
 """
 
 
@@ -83,7 +86,7 @@ def _range_records(records: list[dict[str, Any]], range_id: str | None) -> list[
     n = RANGE_POINTS.get(str(range_id or "30d").lower(), 30)
     return records[-n:] if n > 0 else records
 
-def _base_layout(fig: go.Figure, title: str, height: int = 272) -> go.Figure:
+def _base_layout(fig: go.Figure, title: str, height: int = 291) -> go.Figure:
     fig.update_layout(
         title={"text": title, "x": .01, "font": {"size": 10, "color": TEXT}},
         height=height, paper_bgcolor=BG, plot_bgcolor=PLOT_BG,
@@ -125,6 +128,37 @@ def _screen_a_figure(contract: dict[str, Any], chart_id: str, range_id: str | No
         fig.update_yaxes(title_text="IV %")
     return _base_layout(fig, str(chart.get("title") or chart_id).upper())
 
+
+VOL_SCREEN_A_LABELS = {
+    "realized_volatility": "REALIZED VOLATILITY · RV7D / RV30D",
+    "implied_volatility": "IMPLIED VOLATILITY · DVOL / IV1M",
+    "implied_vs_realized": "IMPLIED VS REALIZED · VRP",
+    "term_structure": "IV TERM STRUCTURE",
+}
+
+def _screen_a_card(contract: dict[str, Any], chart_id: str, range_id: str | None) -> html.Div:
+    figure = _screen_a_figure(contract, chart_id, range_id)
+    figure.update_layout(title=None, margin={"l": 40, "r": 28, "t": 40, "b": 35})
+    return html.Div(
+        className="vol-native-card",
+        children=[
+            html.Div(
+                contextual_help_label(
+                    VOL_SCREEN_A_LABELS[chart_id],
+                    family="volatility",
+                    section="screen_a",
+                    key=chart_id,
+                ),
+                className="context-help-card-title context-help-card-title-compact",
+            ),
+            dcc.Graph(
+                figure=figure,
+                config={"displaylogo": False, "responsive": True},
+                style={"height": "291px", "minHeight": "291px", "width": "100%"},
+            ),
+        ],
+    )
+
 def _analysis_figure(block: dict[str, Any], indicator_id: str, range_id: str | None) -> go.Figure:
     timestamps=_safe_list(block.get("timestamps")); series=_safe_dict(block.get("series"))
     n=RANGE_POINTS.get(str(range_id or "30d").lower(),30)
@@ -155,15 +189,15 @@ def _analysis_figure(block: dict[str, Any], indicator_id: str, range_id: str | N
 
 def _selection_panel() -> html.Div:
     groups=[
-        ("VOLATILITY LEVEL · PANTALLA B","vol-level-select",[{"label":"Volatility Z-Score / Percentile","value":"volatility_zscore_percentile"}]),
-        ("VOLATILITY PRICING · PANTALLA B","vol-pricing-select",[{"label":"Volatility Risk Premium","value":"volatility_risk_premium"}]),
-        ("OPTIONS STRUCTURE · PANTALLA B","vol-options-select",[{"label":"IV Term Structure / Slope","value":"term_structure_slope"},{"label":"Volatility Skew / Tail Risk","value":"volatility_skew_tail_risk"}]),
-        ("VOLATILITY DYNAMICS · PANTALLA B","vol-dynamics-select",[{"label":"Vol-of-Vol / Acceleration","value":"vol_of_vol_acceleration"}]),
-        ("REGIME · PANTALLA B","vol-regime-select",[{"label":"Regime Shift / Wasserstein","value":"regime_shift_wasserstein"}]),
+        ("VOLATILITY LEVEL · SCREEN B","vol-level-select",[{"label":"Volatility Z-Score / Percentile","value":"volatility_zscore_percentile"}]),
+        ("VOLATILITY PRICING · SCREEN B","vol-pricing-select",[{"label":"Volatility Risk Premium","value":"volatility_risk_premium"}]),
+        ("OPTIONS STRUCTURE · SCREEN B","vol-options-select",[{"label":"IV Term Structure / Slope","value":"term_structure_slope"},{"label":"Volatility Skew / Tail Risk","value":"volatility_skew_tail_risk"}]),
+        ("VOLATILITY DYNAMICS · SCREEN B","vol-dynamics-select",[{"label":"Vol-of-Vol / Acceleration","value":"vol_of_vol_acceleration"}]),
+        ("REGIME · SCREEN B","vol-regime-select",[{"label":"Regime Shift / Wasserstein","value":"regime_shift_wasserstein"}]),
     ]
-    children=[dcc.Link("ANÁLISIS DE VOLATILIDAD Y REGÍMENES ↗",href=f"{ROUTE}/analysis",className="vol-native-link"),
-              html.H3("VOLATILITY & MARKET REGIMES · PANTALLA B"),
-              html.Div("Analítica nativa de volatilidad. La HMI solo grafica métricas precomputadas por Processing; no aplica RSI/MACD/ATR ni medias móviles a volatilidad.",className="vol-native-note")]
+    children=[dcc.Link("VOLATILITY & REGIMES ANALYSIS ↗",href=localized_href(f"{ROUTE}/analysis"),className="vol-native-link"),
+              html.H3("VOLATILITY & MARKET REGIMES · SCREEN B"),
+              html.Div("Native volatility analytics. The HMI only plots metrics precomputed by Processing; it does not apply RSI/MACD/ATR or moving averages to volatility.",className="vol-native-note")]
     for title,cid,opts in groups:
         children.append(html.Div(className="vol-native-section",children=[html.Div(title,className="vol-native-label"),dcc.Checklist(id=cid,options=opts,value=[o["value"] for o in opts],className="vol-native-check")]))
     return html.Div(className="vol-native-panel",children=children)
@@ -175,12 +209,9 @@ def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: 
     for iid in ANALYSIS_ORDER:
         if iid not in selected: continue
         block=_safe_dict(ind.get(iid))
-        cards.append(html.Div(className="vol-analysis-card",children=[html.Div([
-            html.Span(str(block.get("section") or "ANALYSIS")),
-            html.Span(" · "),
-            html.Span(str(block.get("label") or iid).upper()),
-        ],className="vol-analysis-title"),dcc.Graph(figure=_analysis_figure(block,iid,range_id),config={"displaylogo":False,"responsive":True},style={"height":"310px"})]))
-    return html.Div(children=[dcc.Link("← REGRESAR",href=ROUTE,className="vol-analysis-back"),html.Div(className="vol-analysis-grid",children=cards)])
+        title_text = f"{str(block.get('section') or 'ANALYSIS')} · {str(block.get('label') or iid).upper()}"
+        cards.append(html.Div(className="vol-analysis-card",children=[html.Div(contextual_help_label(title_text, family="volatility", section="screen_b", key=iid), className="vol-analysis-title"),dcc.Graph(figure=_analysis_figure(block,iid,range_id),config={"displaylogo":False,"responsive":True},style={"height":"310px"})]))
+    return html.Div(children=[dcc.Link("← BACK",href=localized_href(ROUTE),className="vol-analysis-back"),html.Div(className="vol-analysis-grid",children=cards)])
 
 @callback(
     Output(SELECTION_STORE_ID,"data"),
@@ -194,10 +225,12 @@ def _save_selection(*groups: Any) -> list[str]:
             if item not in out: out.append(item)
     return out
 
-@callback(Output(ANALYSIS_CONTENT_ID,"children"),Input(SELECTION_STORE_ID,"data"),Input("range-selector","value"),prevent_initial_call=False)
-def _refresh_analysis(selection: list[str] | None, range_id: str | None) -> html.Div:
+@callback(Output(ANALYSIS_CONTENT_ID,"children"),Input(SELECTION_STORE_ID,"data"),Input("range-selector","value"),Input("url","search"),prevent_initial_call=False)
+def _refresh_analysis(selection: list[str] | None, range_id: str | None, search: str | None) -> html.Div:
     from screen_core.contract_loader import load_contract
-    return _analysis_screen(load_contract(CONTRACT_FILE),range_id,selection)
+    locale = locale_from_search(search)
+    with locale_context(locale):
+        return localize_component_tree(_analysis_screen(load_contract(CONTRACT_FILE),range_id,selection), locale)
 
 def render(contract: dict[str, Any], view: str, market: str | None, timeframe: str | None, range_id: str | None) -> html.Div:
     del market,timeframe
@@ -207,13 +240,13 @@ def render(contract: dict[str, Any], view: str, market: str | None, timeframe: s
         return screen_page(_volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="local"),html.Div(id=ANALYSIS_CONTENT_ID,children=_analysis_screen(contract,range_id,None)))
     charts=_safe_dict(contract.get("charts"))
     return screen_page(
-        _volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="local"),screen_header(contract),kpi_grid(contract.get("kpis")),
+        _volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="local"),screen_header(contract),kpi_grid(contract.get("kpis"), help_family="volatility"),
         html.Div(className="vol-native-main",children=[
             html.Div(className="vol-native-grid",children=[
-                html.Div(className="vol-native-card",children=[dcc.Graph(figure=_screen_a_figure(contract,"realized_volatility",range_id),config={"displaylogo":False,"responsive":True})]),
-                html.Div(className="vol-native-card",children=[dcc.Graph(figure=_screen_a_figure(contract,"implied_volatility",range_id),config={"displaylogo":False,"responsive":True})]),
-                html.Div(className="vol-native-card",children=[dcc.Graph(figure=_screen_a_figure(contract,"implied_vs_realized",range_id),config={"displaylogo":False,"responsive":True})]),
-                html.Div(className="vol-native-card",children=[dcc.Graph(figure=_screen_a_figure(contract,"term_structure",range_id),config={"displaylogo":False,"responsive":True})]),
+                _screen_a_card(contract,"realized_volatility",range_id),
+                _screen_a_card(contract,"implied_volatility",range_id),
+                _screen_a_card(contract,"implied_vs_realized",range_id),
+                _screen_a_card(contract,"term_structure",range_id),
             ]),
             _selection_panel(),
         ]),

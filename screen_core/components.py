@@ -4,6 +4,7 @@ from typing import Any, Iterable
 
 from dash import dash_table, dcc, html
 
+from .contextual_help import contextual_help_label
 from .contract_loader import active_badges, screen_metadata
 from .figures import make_chart_figure
 from .formatting import compact_number, format_metric, format_timestamp, humanize_key
@@ -76,7 +77,7 @@ def _normalize_kpis(kpis: Any) -> list[dict[str, Any]]:
     return items
 
 
-def kpi_grid(kpis: Any, max_items: int | None = None) -> html.Div:
+def kpi_grid(kpis: Any, max_items: int | None = None, help_family: str | None = None) -> html.Div:
     items = _normalize_kpis(kpis)
     if max_items:
         items = items[:max_items]
@@ -105,7 +106,15 @@ def kpi_grid(kpis: Any, max_items: int | None = None) -> html.Div:
             html.Div(
                 className=f"kpi-card status-edge-{_status(status)}",
                 children=[
-                    html.Div(str(label), className="kpi-label"),
+                    html.Div(
+                        contextual_help_label(
+                            str(label),
+                            family=help_family,
+                            section="kpi",
+                            key=str(metric_id),
+                            class_name="kpi-label",
+                        ),
+                    ),
                     html.Div(display, className="kpi-value"),
                     html.Div(
                         [
@@ -130,19 +139,50 @@ def graph_card(
     range_id: str | None = None,
     height: int = 300,
     class_name: str = "panel-card",
+    help_family: str | None = None,
+    help_section: str = "screen_a",
+    help_key: str | None = None,
+    show_card_title: bool = False,
 ) -> html.Div:
-    figure = make_chart_figure(chart, title=title, market=market, timeframe=timeframe, range_id=range_id, height=height)
+    header_title = title or (chart.get("title") if isinstance(chart, dict) else None) or humanize_key(chart_id)
+    figure_title = None if show_card_title else title
+    figure = make_chart_figure(chart, title=figure_title, market=market, timeframe=timeframe, range_id=range_id, height=height)
+    if show_card_title:
+        current_margin = figure.layout.margin.to_plotly_json() if figure.layout.margin else {}
+        figure.update_layout(
+            title=None,
+            margin={
+                "l": current_margin.get("l", 42),
+                "r": current_margin.get("r", 20),
+                "t": max(34, min(int(current_margin.get("t", 42) or 42), 48)),
+                "b": current_margin.get("b", 34),
+            },
+        )
     status = chart.get("status") if isinstance(chart, dict) else "unavailable"
+    children: list[Any] = []
+    if show_card_title:
+        children.append(
+            html.Div(
+                contextual_help_label(
+                    str(header_title),
+                    family=help_family,
+                    section=help_section,
+                    key=help_key or chart_id,
+                ),
+                className="panel-title",
+            )
+        )
+    children.append(
+        dcc.Graph(
+            id={"type": "contract-chart", "index": chart_id},
+            figure=figure,
+            config={"displaylogo": False, "responsive": True, "scrollZoom": True},
+            className="contract-graph",
+        )
+    )
     return html.Div(
         className=f"{class_name} panel-status-{_status(status)}",
-        children=[
-            dcc.Graph(
-                id={"type": "contract-chart", "index": chart_id},
-                figure=figure,
-                config={"displaylogo": False, "responsive": True, "scrollZoom": True},
-                className="contract-graph",
-            )
-        ],
+        children=children,
     )
 
 
@@ -165,13 +205,14 @@ def analysis_grid(
     timeframe: str | None,
     range_id: str | None,
     minimum_slots: int = 9,
+    help_family: str | None = None,
 ) -> html.Div:
     charts = contract.get("charts") if isinstance(contract.get("charts"), dict) else {}
     cards: list[Any] = []
     for chart_id in chart_ids:
         chart = charts.get(chart_id)
         if isinstance(chart, dict):
-            cards.append(graph_card(chart, chart_id=f"analysis-{chart_id}", market=market, timeframe=timeframe, range_id=range_id, height=310, class_name="analysis-chart-card"))
+            cards.append(graph_card(chart, chart_id=f"analysis-{chart_id}", title=chart.get("title") or humanize_key(chart_id), market=market, timeframe=timeframe, range_id=range_id, height=310, class_name="analysis-chart-card", help_family=help_family, help_section="screen_b", help_key=chart_id, show_card_title=True))
         else:
             cards.append(unavailable_analysis_card(chart_id))
     while len(cards) < minimum_slots:
@@ -207,15 +248,15 @@ def _table_rows(table: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in bids + asks if isinstance(item, dict)]
 
 
-def data_table_card(table: dict[str, Any] | None, table_id: str, title: str | None = None, max_rows: int = 14) -> html.Div:
+def data_table_card(table: dict[str, Any] | None, table_id: str, title: str | None = None, max_rows: int = 14, help_family: str | None = None, help_section: str = "screen_a") -> html.Div:
     if not isinstance(table, dict):
-        return html.Div([html.Div(title or humanize_key(table_id), className="panel-title"), html.Div("Table missing in JSON", className="empty-inline")], className="panel-card")
+        return html.Div([html.Div(contextual_help_label(title or humanize_key(table_id), family=help_family, section=help_section, key=table_id), className="panel-title"), html.Div("Table missing in JSON", className="empty-inline")], className="panel-card")
 
     rows = _table_rows(table)
     if not rows:
         return html.Div(
             [
-                html.Div(title or table.get("title") or humanize_key(table_id), className="panel-title"),
+                html.Div(contextual_help_label(title or table.get("title") or humanize_key(table_id), family=help_family, section=help_section, key=table_id), className="panel-title"),
                 html.Div(str(table.get("reason") or "No rows in JSON"), className="empty-inline"),
             ],
             className="panel-card",
@@ -232,7 +273,7 @@ def data_table_card(table: dict[str, Any] | None, table_id: str, title: str | No
     return html.Div(
         className="panel-card table-card",
         children=[
-            html.Div(title or table.get("title") or humanize_key(table_id), className="panel-title"),
+            html.Div(contextual_help_label(title or table.get("title") or humanize_key(table_id), family=help_family, section=help_section, key=table_id), className="panel-title"),
             dash_table.DataTable(
                 id={"type": "contract-table", "index": table_id},
                 data=display_rows,
@@ -267,7 +308,7 @@ def nested_table_sections(table: dict[str, Any] | None, prefix: str) -> html.Div
     return html.Div(cards or [html.Div("No tabular rows in this contract section", className="empty-inline")], className="summary-stack")
 
 
-def widget_cards(widgets: Any, max_items: int = 6) -> html.Div:
+def widget_cards(widgets: Any, max_items: int = 6, help_family: str | None = None) -> html.Div:
     if not isinstance(widgets, dict):
         return html.Div("No widgets in JSON", className="empty-inline")
     cards: list[Any] = []
@@ -288,7 +329,15 @@ def widget_cards(widgets: Any, max_items: int = 6) -> html.Div:
             html.Div(
                 className=f"widget-card status-edge-{_status(status)}",
                 children=[
-                    html.Div(label, className="widget-label"),
+                    html.Div(
+                        contextual_help_label(
+                            str(label),
+                            family=help_family,
+                            section="kpi",
+                            key=str(key),
+                            class_name="widget-label",
+                        ),
+                    ),
                     html.Div(display, className="widget-value"),
                     html.Div(str(state or status).upper(), className=f"widget-state state-{_status(status)}"),
                 ],

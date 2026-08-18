@@ -11,6 +11,8 @@ from screen_core.components import (
     screen_header,
     screen_page,
 )
+from screen_core.contextual_help import contextual_help_label
+from screen_core.i18n import localized_href
 from screen_core.figures import apply_analysis_figure_layout
 
 
@@ -1156,9 +1158,12 @@ def _side_panel(
                 className="liq-summary-row",
                 children=[
                     html.Span(
-                        _summary_label(item),
-                        className=(
-                            "liq-summary-label"
+                        contextual_help_label(
+                            _summary_label(item),
+                            family="liquidations",
+                            section="kpi",
+                            key=str(item.get("id") or ""),
+                            class_name="liq-summary-label",
                         ),
                     ),
                     html.Strong(
@@ -1217,8 +1222,13 @@ def _map_card(
 
     header_children: list[Any] = [
         html.Div(
-            str(chart_title).upper(),
-            className="liq-chart-title",
+            contextual_help_label(
+                str(chart_title).upper(),
+                family="liquidations",
+                section="screen_a",
+                key={"aggregate": "aggregate_map", "hyperliquid": "hyperliquid_map", "binance": "binance_leverage_map"}[map_kind],
+                class_name="liq-chart-title",
+            ),
             title=str(chart_title).upper(),
         )
     ]
@@ -1338,12 +1348,20 @@ def _positioning_card(contract: dict[str, Any], height: int = 365) -> html.Div:
             html.Div(
                 className="liq-chart-header",
                 children=[
-                    html.Div("LONG / SHORT POSITIONING", className="liq-chart-title"),
+                    html.Div(
+                        contextual_help_label(
+                            "LONG / SHORT POSITIONING",
+                            family="liquidations",
+                            section="screen_a",
+                            key="long_short_positioning",
+                            class_name="liq-chart-title",
+                        )
+                    ),
                     html.Div(
                         className="liq-position-actions",
                         children=[
-                            dcc.Link("ANÁLISIS", href=f"{ROUTE}/analysis", className="liq-analysis-link"),
-                            html.A("↗", href=f"{ROUTE}/analysis", target="_blank", rel="noopener noreferrer", className="liq-analysis-link"),
+                            dcc.Link("ANALYSIS", href=localized_href(f"{ROUTE}/analysis"), className="liq-analysis-link"),
+                            html.A("↗", href=localized_href(f"{ROUTE}/analysis"), target="_blank", rel="noopener noreferrer", className="liq-analysis-link"),
                         ],
                     ),
                 ],
@@ -1453,7 +1471,7 @@ def _analysis_screen(contract: dict[str, Any]) -> html.Div:
         cards.append(html.Div(
             className="liq-analysis-card",
             children=[
-                html.Div(ANALYSIS_LABELS[indicator_id], className="liq-analysis-card-title"),
+                html.Div(contextual_help_label(ANALYSIS_LABELS[indicator_id], family="liquidations", section="screen_b", key=indicator_id), className="liq-analysis-card-title"),
                 dcc.Graph(
                     figure=_analysis_figure(contract, indicator_id),
                     config={"displaylogo": False, "responsive": True, "scrollZoom": False},
@@ -1466,10 +1484,10 @@ def _analysis_screen(contract: dict[str, Any]) -> html.Div:
         className="liq-analysis-shell",
         children=[
             html.Div(className="liq-analysis-back-row", children=[
-                dcc.Link("← REGRESAR", href=ROUTE, className="liq-analysis-link"),
+                dcc.Link("← BACK", href=localized_href(ROUTE), className="liq-analysis-link"),
             ]),
             html.Div(
-                "Pantalla B nativa: liquidaciones realizadas, cascadas, crowding y régimen. Long/Short Ratio es posicionamiento; no se interpreta como liquidación realizada.",
+                "Native Screen B: realized liquidations, cascades, crowding and regime. Long/Short Ratio is positioning; it is not interpreted as a realized liquidation.",
                 className="liq-analysis-subtitle",
             ),
             html.Div(cards, className="liq-analysis-grid"),

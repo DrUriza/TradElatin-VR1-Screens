@@ -14,6 +14,8 @@ from screen_core.components import (
     screen_page,
     widget_cards,
 )
+from screen_core.contextual_help import contextual_help_label
+from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.figures import apply_analysis_figure_layout
 
@@ -76,12 +78,12 @@ ANALYSIS_LABELS = {
 
 GROUPS = (
     (
-        "MINER TREASURY · PANTALLA B",
+        "MINER TREASURY · SCREEN B",
         "onchain-treasury",
         [{"label": "Miner Reserve Change / Z-Score", "value": "miner_reserve_change_zscore"}],
     ),
     (
-        "SELLING PRESSURE / ECONOMICS · PANTALLA B",
+        "SELLING PRESSURE / ECONOMICS · SCREEN B",
         "onchain-selling",
         [
             {"label": "MPI / Miner-to-Exchange Pressure", "value": "miner_selling_pressure"},
@@ -89,7 +91,7 @@ GROUPS = (
         ],
     ),
     (
-        "NETWORK HEALTH · PANTALLA B",
+        "NETWORK HEALTH · SCREEN B",
         "onchain-network",
         [
             {"label": "Hashrate Momentum / Hash Ribbon", "value": "hashrate_momentum_hash_ribbon"},
@@ -97,7 +99,7 @@ GROUPS = (
         ],
     ),
     (
-        "MINER REGIME · PANTALLA B",
+        "MINER REGIME · SCREEN B",
         "onchain-regime",
         [{"label": "Capitulation / Recovery + Wasserstein", "value": "miner_capitulation_recovery_regime"}],
     ),
@@ -249,11 +251,11 @@ def _metric_figure(contract: dict[str, Any], chart_id: str, range_id: str | None
         fig.update_yaxes(range=[ymin - pad, ymax + pad])
 
     fig.update_layout(
-        title={"text": chart.get("title") or chart_id, "x": .01, "font": {"size": 10, "color": TEXT}},
+        title=None,
         height=291,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
-        margin={"l": 44, "r": 10, "t": 34, "b": 34},
+        margin={"l": 44, "r": 10, "t": 20, "b": 34},
         font={"family": "Inter, Segoe UI, sans-serif", "color": TEXT, "size": 8},
         showlegend=False,
         hovermode="x unified",
@@ -363,12 +365,12 @@ def _selector_panel() -> html.Div:
         html.Div(
             style={"display": "grid", "gridTemplateColumns": "minmax(0,1fr) 34px", "gap": "4px", "marginBottom": "12px"},
             children=[
-                dcc.Link("ANÁLISIS ON-CHAIN & MINERS", href=f"{ROUTE}/analysis", className="onchain-button", style={"display": "flex", "alignItems": "center", "justifyContent": "center", "textDecoration": "none"}),
-                html.A("↗", href=f"{ROUTE}/analysis", target="_blank", rel="noopener noreferrer", className="onchain-button", style={"display": "flex", "alignItems": "center", "justifyContent": "center", "textDecoration": "none"}),
+                dcc.Link("ON-CHAIN & MINERS ANALYSIS", href=localized_href(f"{ROUTE}/analysis"), className="onchain-button", style={"display": "flex", "alignItems": "center", "justifyContent": "center", "textDecoration": "none"}),
+                html.A("↗", href=localized_href(f"{ROUTE}/analysis"), target="_blank", rel="noopener noreferrer", className="onchain-button", style={"display": "flex", "alignItems": "center", "justifyContent": "center", "textDecoration": "none"}),
             ],
         ),
-        html.Div("MÉTRICAS NATIVAS", className="onchain-heading"),
-        html.Div("Pantalla B especializada en treasury de mineros, presión de venta, economía minera, salud de red y cambio de régimen. La HMI solo grafica resultados precalculados por Processing.", className="onchain-note"),
+        html.Div("NATIVE METRICS", className="onchain-heading"),
+        html.Div("Screen B specialized in miner treasury, selling pressure, mining economics, network health and regime change. The HMI only plots results precomputed by Processing.", className="onchain-note"),
     ]
     for title, component_id, options in GROUPS:
         children.append(html.Div(className="onchain-group", children=[html.Div(title, className="onchain-group-title"), _checklist(component_id, options)]))
@@ -399,12 +401,12 @@ def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: 
     cards=[]
     for iid in selected:
         cards.append(html.Div(className="onchain-analysis-card", children=[
-            html.Div(ANALYSIS_LABELS[iid], className="onchain-analysis-card-title"),
+            html.Div(contextual_help_label(ANALYSIS_LABELS[iid], family="miners", section="screen_b", key=iid), className="onchain-analysis-card-title"),
             dcc.Graph(figure=_native_indicator_figure(contract, iid, range_id), config={"displaylogo": False, "responsive": True}, style={"height": "310px", "minHeight": "310px", "width": "100%"}),
         ]))
-    body = html.Div(cards, className="onchain-analysis-grid") if cards else html.Div("No seleccionaste métricas de Pantalla B.", className="contract-warning")
+    body = html.Div(cards, className="onchain-analysis-grid") if cards else html.Div("No metrics selected for Screen B.", className="contract-warning")
     return html.Div(className="onchain-analysis-shell", children=[
-        html.Div(className="analysis-back-row", children=[dcc.Link("← REGRESAR", href=ROUTE, className="analysis-back-button")]),
+        html.Div(className="analysis-back-row", children=[dcc.Link("← BACK", href=localized_href(ROUTE), className="analysis-back-button")]),
         html.Div(className="onchain-analysis-layout", children=[body, _summary_column(contract, selected)]),
     ])
 
@@ -416,11 +418,13 @@ def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: 
     Output("onchain-difficulty", "figure"),
     Input("range-selector", "value"),
     Input("reload-json", "n_clicks"),
+    Input("url", "search"),
     prevent_initial_call=True,
 )
-def update_main_charts(range_id: str | None, _reload: int | None):
+def update_main_charts(range_id: str | None, _reload: int | None, search: str | None):
+    locale = locale_from_search(search)
     contract = load_contract(CONTRACT_FILE)
-    return tuple(_metric_figure(contract, chart_id, range_id) for chart_id in TARGETS)
+    return tuple(localize_figure(_metric_figure(contract, chart_id, range_id), locale) for chart_id in TARGETS)
 
 
 @callback(
@@ -440,11 +444,14 @@ def persist_selection(treasury: list[str] | None, selling: list[str] | None, net
     Input(SELECTION_STORE_ID, "data"),
     Input("range-selector", "value"),
     Input("reload-json", "n_clicks"),
+    Input("url", "search"),
     prevent_initial_call=False,
 )
-def update_analysis(selection: Any, range_id: str | None, _reload: int | None):
+def update_analysis(selection: Any, range_id: str | None, _reload: int | None, search: str | None):
+    locale = locale_from_search(search)
     contract = load_contract(CONTRACT_FILE)
-    return _analysis_screen(contract, range_id, selection or _default_selection())
+    with locale_context(locale):
+        return localize_component_tree(_analysis_screen(contract, range_id, selection or _default_selection()), locale)
 
 
 def render(contract: dict[str, Any], view: str, market: str | None, timeframe: str | None, range_id: str | None) -> html.Div:
@@ -472,14 +479,25 @@ def render(contract: dict[str, Any], view: str, market: str | None, timeframe: s
     }
     main_grid = html.Div(className="onchain-main-grid", children=[
         html.Div(className="onchain-series-grid", children=[
-            html.Div(className="onchain-card", children=[dcc.Graph(id=graph_ids[cid], figure=_metric_figure(contract, cid, range_id), config={"displaylogo": False, "responsive": True, "scrollZoom": True}, style={"height": "291px", "minHeight": "291px", "width": "100%"})])
+            html.Div(className="onchain-card", children=[
+                html.Div(
+                    contextual_help_label(
+                        str(_safe_dict(charts.get(cid)).get("title") or cid).upper(),
+                        family="miners",
+                        section="screen_a",
+                        key=cid,
+                    ),
+                    className="context-help-card-title context-help-card-title-compact",
+                ),
+                dcc.Graph(id=graph_ids[cid], figure=_metric_figure(contract, cid, range_id), config={"displaylogo": False, "responsive": True, "scrollZoom": True}, style={"height": "266px", "minHeight": "266px", "width": "100%"})
+            ])
             for cid in TARGETS
         ]),
         _selector_panel(),
     ])
 
-    top_widgets = html.Div(widget_cards(contract.get("widgets"), max_items=4), className="onchain-top-widgets")
-    bottom = graph_card(charts.get("miner_net_position_change"), chart_id="miner-net-position", range_id=range_id, height=300)
+    top_widgets = html.Div(widget_cards(contract.get("widgets"), max_items=4, help_family="miners"), className="onchain-top-widgets")
+    bottom = graph_card(charts.get("miner_net_position_change"), chart_id="miner-net-position", title="Miner Net Position Change", range_id=range_id, height=300, help_family="miners", help_section="screen_a", help_key="miner_net_position_change", show_card_title=True)
 
     return screen_page(
         _stylesheet(),

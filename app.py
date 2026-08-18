@@ -8,6 +8,13 @@ from dash import Dash, Input, Output, State, ctx, dcc, html, no_update
 
 from screen_core.contract_loader import active_badges, contract_revision, load_contract, screen_metadata, selector_spec
 from screen_core.formatting import format_timestamp
+from screen_core.i18n import (
+    locale_context,
+    locale_from_search,
+    localize_component_tree,
+    localize_options,
+    tr,
+)
 from screens import (
     cvd_volume_orderflow,
     etf_exchange_flows,
@@ -68,6 +75,13 @@ TIMEFRAME_REFRESH_MS = {
 }
 DEFAULT_REFRESH_MS = 60_000
 
+TRACE_I18N = os.getenv("TRADELATIN_TRACE_I18N", "0").lower() in {"1", "true", "yes"}
+
+def _trace_i18n(event: str, *, locale: str, pathname: str | None = None, search: str | None = None) -> None:
+    if TRACE_I18N:
+        print(f"[I18N] event={event} locale={locale} pathname={pathname or '-'} search={search or '-'}", flush=True)
+
+
 
 def _normalized_path(pathname: str | None) -> str:
     if not pathname or pathname == '/':
@@ -109,7 +123,7 @@ def selector_box(label: str, component_id: str) -> html.Div:
         id=f'{component_id}-box',
         className='control-group',
         children=[
-            html.Label(label, className='control-label'),
+            html.Label(label, id=f'{component_id}-label', className='control-label'),
             dcc.Dropdown(
                 id=component_id,
                 options=[],
@@ -128,7 +142,7 @@ def selector_buttons(label: str, component_id: str) -> html.Div:
         id=f'{component_id}-box',
         className='header-control-group',
         children=[
-            html.Span(label, className='header-control-label'),
+            html.Span(label, id=f'{component_id}-label', className='header-control-label'),
             dcc.RadioItems(
                 id=component_id,
                 options=[],
@@ -172,46 +186,54 @@ def _header_badges(contract: dict[str, Any]) -> list[Any]:
     return nodes
 
 
-def family_nav_item(module: ModuleType) -> html.Div:
-    """Family name opens in current tab; arrow opens the same route in a new tab."""
+def family_nav_item(module: ModuleType, locale: str = "en") -> html.Div:
+    """Navigation item preserving the explicit URL locale."""
+    label = tr(module.LABEL, locale)
+    route = f"{module.ROUTE}?lang={locale}"
+    open_title = (
+        f"Abrir {label} en una nueva pestaña"
+        if locale == "es"
+        else f"Open {label} in a new tab"
+    )
     return html.Div(
-        className='family-nav-item',
+        className="family-nav-item",
         style={
-            'display': 'grid',
-            'gridTemplateColumns': 'minmax(0, 1fr) 20px',
-            'alignItems': 'center',
-            'minWidth': '96px',
-            'gap': '2px',
+            "display": "grid",
+            "gridTemplateColumns": "minmax(0, 1fr) 20px",
+            "alignItems": "center",
+            "minWidth": "96px",
+            "gap": "2px",
         },
         children=[
             dcc.Link(
-                module.LABEL,
-                href=module.ROUTE,
-                className='nav-link',
+                label,
+                href=route,
+                refresh=False,
+                className="nav-link",
                 style={
-                    'display': 'block',
-                    'minWidth': '0',
-                    'textAlign': 'center',
-                    'whiteSpace': 'nowrap',
-                    'overflow': 'hidden',
-                    'textOverflow': 'ellipsis',
-                    'textDecoration': 'none',
+                    "display": "block",
+                    "minWidth": "0",
+                    "textAlign": "center",
+                    "whiteSpace": "nowrap",
+                    "overflow": "hidden",
+                    "textOverflow": "ellipsis",
+                    "textDecoration": "none",
                 },
             ),
             html.A(
-                '↗',
-                href=module.ROUTE,
-                target='_blank',
-                rel='noopener noreferrer',
-                title=f'Abrir {module.LABEL} en una nueva pestaña',
-                className='nav-link nav-external-link',
+                "↗",
+                href=route,
+                target="_blank",
+                rel="noopener noreferrer",
+                title=open_title,
+                className="nav-link nav-external-link",
                 style={
-                    'display': 'flex',
-                    'alignItems': 'center',
-                    'justifyContent': 'center',
-                    'textDecoration': 'none',
-                    'fontSize': '10px',
-                    'opacity': '.70',
+                    "display": "flex",
+                    "alignItems": "center",
+                    "justifyContent": "center",
+                    "textDecoration": "none",
+                    "fontSize": "10px",
+                    "opacity": ".70",
                 },
             ),
         ],
@@ -221,126 +243,204 @@ def family_nav_item(module: ModuleType) -> html.Div:
 app = Dash(
     __name__,
     suppress_callback_exceptions=True,
-    title='TradELATIN Screen Deployment',
-    update_title='TradELATIN · Loading...',
+    title="TradELATIN Screen Deployment",
+    update_title=None,
+    # Never load legacy DOM translators. Language is pure Dash state.
+    assets_ignore=r"^i18n_runtime\.js$",
 )
 server = app.server
 
-app.layout = html.Div(
-    className='app-shell',
-    children=[
-        dcc.Location(id='url', refresh=False),
-        dcc.Interval(
-            id='auto-refresh',
-            interval=DEFAULT_REFRESH_MS,
-            n_intervals=0,
-            disabled=True,
-        ),
-        # Compatibility signal consumed by the existing screen callbacks.
-        # It is never shown to the user; both auto and manual refresh increment it.
-        html.Button('', id='reload-json', n_clicks=0, style={'display': 'none'}),
-        html.Header(
-            className='topbar',
-            children=[
-                html.Div(
-                    className='brand-block',
-                    children=[
-                        html.Div('T', className='brand-mark'),
-                        html.Div([
-                            html.Strong('TradELATIN', className='brand-name'),
-                            html.Span('VR1', className='brand-version'),
-                        ]),
-                    ],
-                ),
-                html.Nav(
-                    [family_nav_item(module) for module in SCREENS],
-                    className='main-nav',
-                    style={
-                        'flex': '1 1 auto',
-                        'display': 'grid',
-                        'gridTemplateColumns': 'repeat(8, minmax(96px, 1fr))',
-                        'alignItems': 'center',
-                        'gap': '3px',
-                        'minWidth': '0',
-                        'overflowX': 'auto',
-                        'padding': '0 14px',
-                    },
-                ),
-                html.Div(
-                    [html.Span('DEMO', className='status-badge status-warning')],
-                    className='topbar-status',
-                    style={'flex': '0 0 auto'},
-                ),
-            ],
-        ),
-        # Hidden compatibility state. VIEW/MARKET stay mounted, while the
-        # temporal controls are rendered in the visible compact family header below.
-        html.Div(
-            [
-                selector_box('VIEW', 'screen-view'),
-                html.Div(id='contract-revision', className='revision-text'),
-            ],
-            style={'display': 'none'},
-        ),
-        html.Div(
-            className='screen-header-shell',
-            children=[
-                html.Div(
-                    className='compact-family-header',
-                    children=[
-                        html.Div(
-                            className='compact-family-identity',
-                            children=[
-                                html.Div(id='app-screen-eyebrow', className='compact-family-eyebrow'),
-                                html.H1(id='app-screen-title', className='compact-family-title'),
-                                html.Div(id='app-screen-subtitle', style={'display': 'none'}),
-                            ],
-                        ),
-                        html.Div(
-                            className='compact-family-controls',
-                            children=[
-                                selector_buttons('MARKET', 'market-selector'),
-                                selector_buttons('TIMEFRAME', 'timeframe-selector'),
-                                # Range-backed families keep their contractual selector
-                                # internally, but use the same compact TIMEFRAME label.
-                                selector_buttons('TIMEFRAME', 'range-selector'),
-                                html.Button(
-                                    '↻ RELOAD',
-                                    id='manual-reload',
-                                    n_clicks=0,
-                                    className='reload-button header-reload-button',
-                                ),
-                            ],
-                        ),
-                        html.Div(
-                            className='compact-family-meta',
-                            children=[
-                                html.Div(id='app-badge-row', className='badge-row'),
-                                html.Div(
-                                    [
-                                        html.Span('DATA AS OF', className='meta-label'),
-                                        html.Span(id='app-data-as-of', className='meta-value'),
-                                    ],
-                                    className='meta-block',
-                                ),
-                            ],
-                        ),
-                    ],
-                ),
-            ],
-        ),
-        html.Main(id='page-content', className='page-content'),
-        html.Footer(
-            className='app-footer',
-            children=[
-                html.Span('DATA SOURCE STATUS'),
-                html.Span('JSON contracts loaded from data/contracts'),
-                html.Span('HMI computes no market indicators'),
-                html.Span('TradELATIN VR1 · Screen Deployment'),
-            ],
-        ),
-    ],
+
+def _language_switch() -> html.Div:
+    return html.Div(
+        className="language-switch",
+        title="Language / Idioma",
+        children=[
+            html.Span("LANGUAGE", id="language-switch-label", className="language-switch-label"),
+            html.Button("EN", id="lang-en", n_clicks=0, className="language-option language-option-active"),
+            html.Button("ES", id="lang-es", n_clicks=0, className="language-option"),
+        ],
+    )
+
+
+def serve_layout() -> html.Div:
+    return html.Div(
+        className='app-shell',
+                children=[
+            dcc.Location(id='url', refresh=False),
+            dcc.Interval(
+                id='auto-refresh',
+                interval=DEFAULT_REFRESH_MS,
+                n_intervals=0,
+                disabled=True,
+            ),
+            html.Button('', id='reload-json', n_clicks=0, style={'display': 'none'}),
+            html.Header(
+                className='topbar',
+                children=[
+                    html.Div(
+                        className='brand-block',
+                        children=[
+                            html.Div('T', className='brand-mark'),
+                            html.Div([
+                                html.Strong('TradELATIN', className='brand-name'),
+                                html.Span('VR1', className='brand-version'),
+                            ]),
+                        ],
+                    ),
+                    html.Nav(
+                        [family_nav_item(module, 'en') for module in SCREENS],
+                        id='main-nav',
+                        className='main-nav',
+                        style={
+                            'flex': '1 1 auto',
+                            'display': 'grid',
+                            'gridTemplateColumns': 'repeat(8, minmax(96px, 1fr))',
+                            'alignItems': 'center',
+                            'gap': '3px',
+                            'minWidth': '0',
+                            'overflowX': 'auto',
+                            'padding': '0 14px',
+                        },
+                    ),
+                    html.Div(
+                        [
+                            _language_switch(),
+                            html.Span('DEMO', className='status-badge status-warning'),
+                        ],
+                        className='topbar-status language-topbar-group',
+                        style={'flex': '0 0 auto'},
+                    ),
+                ],
+            ),
+            html.Div(
+                [
+                    selector_box('VIEW', 'screen-view'),
+                    html.Div(id='contract-revision', className='revision-text'),
+                ],
+                style={'display': 'none'},
+            ),
+            html.Div(
+                className='screen-header-shell',
+                children=[
+                    html.Div(
+                        className='compact-family-header',
+                        children=[
+                            html.Div(
+                                className='compact-family-identity',
+                                children=[
+                                    html.Div(id='app-screen-eyebrow', className='compact-family-eyebrow'),
+                                    html.H1(id='app-screen-title', className='compact-family-title'),
+                                    html.Div(id='app-screen-subtitle', style={'display': 'none'}),
+                                ],
+                            ),
+                            html.Div(
+                                className='compact-family-controls',
+                                children=[
+                                    selector_buttons('MARKET', 'market-selector'),
+                                    selector_buttons('TIMEFRAME', 'timeframe-selector'),
+                                    selector_buttons('TIMEFRAME', 'range-selector'),
+                                    html.Button(
+                                        "↻ RELOAD",
+                                        id='manual-reload',
+                                        n_clicks=0,
+                                        className='reload-button header-reload-button',
+                                    ),
+                                ],
+                            ),
+                            html.Div(
+                                className='compact-family-meta',
+                                children=[
+                                    html.Div(id='app-badge-row', className='badge-row'),
+                                    html.Div(
+                                        [
+                                            html.Span('DATA AS OF', id='data-as-of-label', className='meta-label'),
+                                            html.Span(id='app-data-as-of', className='meta-value'),
+                                        ],
+                                        className='meta-block',
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+            html.Main(id='page-content', className='page-content'),
+            html.Footer(
+                className='app-footer',
+                children=[
+                    html.Span('DATA SOURCE STATUS', id='footer-source-status'),
+                    html.Span('JSON contracts loaded from data/contracts', id='footer-contracts'),
+                    html.Span('HMI computes no market indicators', id='footer-hmi'),
+                    html.Span('TradELATIN VR1 · Screen Deployment', id='footer-deployment'),
+                ],
+            ),
+        ],
+    )
+
+
+app.layout = serve_layout()
+
+
+@app.callback(
+    Output("url", "search"),
+    Input("lang-en", "n_clicks"),
+    Input("lang-es", "n_clicks"),
+    State("url", "search"),
+    prevent_initial_call=True,
 )
+def switch_language(_en_clicks: int | None, _es_clicks: int | None, current_search: str | None) -> Any:
+    """Change only the explicit URL language state. No reload, cookie or JS mutation."""
+    if ctx.triggered_id == "lang-en":
+        desired = "en"
+    elif ctx.triggered_id == "lang-es":
+        desired = "es"
+    else:
+        return no_update
+
+    if locale_from_search(current_search) == desired:
+        return no_update
+    return f"?lang={desired}"
+
+
+@app.callback(
+    Output("main-nav", "children"),
+    Output("language-switch-label", "children"),
+    Output("lang-en", "className"),
+    Output("lang-es", "className"),
+    Output("screen-view-label", "children"),
+    Output("market-selector-label", "children"),
+    Output("timeframe-selector-label", "children"),
+    Output("range-selector-label", "children"),
+    Output("manual-reload", "children"),
+    Output("data-as-of-label", "children"),
+    Output("footer-source-status", "children"),
+    Output("footer-contracts", "children"),
+    Output("footer-hmi", "children"),
+    Output("footer-deployment", "children"),
+    Input("url", "search"),
+)
+def sync_locale_shell(search: str | None) -> tuple[Any, ...]:
+    locale = locale_from_search(search)
+    _trace_i18n("shell", locale=locale, search=search)
+    active = "language-option language-option-active"
+    inactive = "language-option"
+    return (
+        [family_nav_item(module, locale) for module in SCREENS],
+        tr("LANGUAGE", locale),
+        active if locale == "en" else inactive,
+        active if locale == "es" else inactive,
+        tr("VIEW", locale),
+        tr("MARKET", locale),
+        tr("TIMEFRAME", locale),
+        tr("TIMEFRAME", locale),
+        f"↻ {tr('RELOAD', locale)}",
+        tr("DATA AS OF", locale),
+        tr("DATA SOURCE STATUS", locale),
+        tr("JSON contracts loaded from data/contracts", locale),
+        tr("HMI computes no market indicators", locale),
+        tr("TradELATIN VR1 · Screen Deployment", locale),
+    )
 
 
 @app.callback(
@@ -357,6 +457,7 @@ app.layout = html.Div(
     Output('range-selector-box', 'style'),
     Output('contract-revision', 'children'),
     Input('url', 'pathname'),
+    Input('url', 'search'),
     Input('reload-json', 'n_clicks'),
     State('screen-view', 'value'),
     State('market-selector', 'value'),
@@ -365,19 +466,21 @@ app.layout = html.Div(
 )
 def sync_controls(
     pathname: str | None,
+    search: str | None,
     _reload_clicks: int,
     _current_view: str | None,
     current_market: str | None,
     current_timeframe: str | None,
     current_range: str | None,
 ) -> tuple[Any, ...]:
+    locale = locale_from_search(search)
     module, route_view = resolve_route(pathname)
     contract = load_contract(module.CONTRACT_FILE)
 
-    view_options = [{'label': 'PANTALLA A', 'value': 'main'}]
+    view_options = [{'label': tr('SCREEN A', locale), 'value': 'main'}]
     if module.HAS_ANALYSIS:
-        view_options.append({'label': 'PANTALLA B', 'value': 'analysis'})
-    view_options.append({'label': 'REFERENCIA', 'value': 'reference'})
+        view_options.append({'label': tr('SCREEN B', locale), 'value': 'analysis'})
+    view_options.append({'label': tr('REFERENCE', locale), 'value': 'reference'})
 
     # URL is the canonical navigation state. screen-view remains only for
     # backwards compatibility with old per-screen callbacks.
@@ -403,6 +506,10 @@ def sync_controls(
     else:
         timeframe_options, timeframe_default = [], None
         range_options, range_default = [], None
+
+    market_options = localize_options(market_options, locale)
+    timeframe_options = localize_options(timeframe_options, locale)
+    range_options = localize_options(range_options, locale)
 
     market_values = {item['value'] for item in market_options}
     timeframe_values = {item['value'] for item in timeframe_options}
@@ -439,27 +546,29 @@ def sync_controls(
     Output('app-badge-row', 'children'),
     Output('app-data-as-of', 'children'),
     Input('url', 'pathname'),
+    Input('url', 'search'),
     Input('reload-json', 'n_clicks'),
 )
-def sync_compact_header(pathname: str | None, _reload_clicks: int) -> tuple[Any, ...]:
+def sync_compact_header(pathname: str | None, search: str | None, _reload_clicks: int) -> tuple[Any, ...]:
+    locale = locale_from_search(search)
     module, route_view = resolve_route(pathname)
     contract = load_contract(module.CONTRACT_FILE)
     meta = screen_metadata(contract)
 
     if route_view == 'analysis':
-        eyebrow = 'ANÁLISIS TÉCNICO FUNDAMENTAL'
+        eyebrow = tr('FUNDAMENTAL TECHNICAL ANALYSIS', locale)
     elif route_view == 'reference':
-        eyebrow = 'REFERENCIA CONTRACTUAL'
+        eyebrow = tr('CONTRACT REFERENCE', locale)
     else:
-        eyebrow = 'TRAD ELATIN TRADING TOOL'
+        eyebrow = tr('TRAD ELATIN TRADING TOOL', locale)
 
-    title = meta.get('title') or module.LABEL
-    subtitle = meta.get('subtitle') or str(meta.get('family') or '')
+    title = tr(meta.get('title') or module.LABEL, locale)
+    subtitle = tr(meta.get('subtitle') or str(meta.get('family') or ''), locale)
     return (
         eyebrow,
         title,
         subtitle,
-        _header_badges(contract),
+        localize_component_tree(_header_badges(contract), locale),
         format_timestamp(meta.get('data_as_of')),
     )
 
@@ -506,7 +615,7 @@ def dispatch_refresh(
 @app.callback(
     Output('page-content', 'children'),
     Input('url', 'pathname'),
-    Input('screen-view', 'value'),
+    Input('url', 'search'),
     Input('market-selector', 'value'),
     Input('timeframe-selector', 'value'),
     Input('range-selector', 'value'),
@@ -514,30 +623,34 @@ def dispatch_refresh(
 )
 def render_screen(
     pathname: str | None,
-    _compat_view: str | None,
+    search: str | None,
     market: str | None,
     timeframe: str | None,
     range_id: str | None,
     _reload_clicks: int,
 ) -> html.Div:
+    locale = locale_from_search(search)
+    _trace_i18n("render", locale=locale, pathname=pathname, search=search)
     module, route_view = resolve_route(pathname)
     try:
         contract = load_contract(module.CONTRACT_FILE)
-        return module.render(contract, route_view, market, timeframe, range_id)
+        with locale_context(locale):
+            rendered = module.render(contract, route_view, market, timeframe, range_id)
+            return localize_component_tree(rendered, locale)
     except Exception as exc:
         return html.Div(
             className='fatal-contract-error',
             children=[
-                html.H2('CONTRACT LOAD ERROR'),
+                html.H2(tr('CONTRACT LOAD ERROR', locale)),
                 html.Div(module.CONTRACT_FILE, className='fatal-file'),
                 html.Pre(str(exc)),
-                html.P('Correct the JSON and press RELOAD. No fallback data is fabricated.'),
+                html.P(tr('Correct the JSON and press RELOAD. No fallback data is fabricated.', locale)),
             ],
         )
 
 
 if __name__ == '__main__':
     host = os.getenv('TRADELATIN_HOST', '127.0.0.1')
-    port = int(os.getenv('TRADELATIN_PORT', '8050'))
-    debug = os.getenv('TRADELATIN_DEBUG', '1').lower() not in {'0', 'false', 'no'}
-    app.run(host=host, port=port, debug=debug)
+    port = int(os.getenv('TRADELATIN_PORT', '8002'))
+    debug = os.getenv('TRADELATIN_DEBUG', '0').lower() not in {'0', 'false', 'no'}
+    app.run(host=host, port=port, debug=debug, use_reloader=False)

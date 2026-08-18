@@ -17,6 +17,8 @@ from screen_core.components import (
     screen_page,
     two_column,
 )
+from screen_core.contextual_help import contextual_help_label
+from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
@@ -35,14 +37,14 @@ REFERENCE_IMAGES = [
 
 
 PRICE_KPI_SPEC = (
-    ("last_price", "PRECIO ACTUAL", "default"),
-    ("change_24h", "CAMBIO 24H", "change"),
-    ("high_24h", "MÁX. 24H", "default"),
-    ("low_24h", "MÍN. 24H", "default"),
-    ("volume_24h", "VOLUMEN 24H", "default"),
+    ("last_price", "CURRENT PRICE", "default"),
+    ("change_24h", "CHANGE 24H", "change"),
+    ("high_24h", "HIGH 24H", "default"),
+    ("low_24h", "LOW 24H", "default"),
+    ("volume_24h", "VOLUME 24H", "default"),
     ("market_cap", "MARKET CAP", "default"),
-    ("volatility_atr_percent", "VOLATILIDAD (ATR %)", "default"),
-    ("average_range", "RANGO PROMEDIO (24H)", "default"),
+    ("volatility_atr_percent", "VOLATILITY (ATR %)", "default"),
+    ("average_range", "AVERAGE RANGE (24H)", "default"),
 )
 
 
@@ -58,9 +60,9 @@ TREND_OPTIONS = [
 BAND_OPTIONS = [
     {"label": "Bollinger Bands (20, 2)", "value": "bollinger_bands"},
     {"label": "Fibonacci", "value": "fibonacci_levels"},
-    {"label": "Soportes", "value": "support"},
-    {"label": "Resistencias", "value": "resistance"},
-    {"label": "Canal de Regresión", "value": "regression_channel"},
+    {"label": "Support", "value": "support"},
+    {"label": "Resistance", "value": "resistance"},
+    {"label": "Regression Channel", "value": "regression_channel"},
 ]
 
 DERIVED_ANALYSIS_OPTIONS = [
@@ -86,7 +88,7 @@ VOLATILITY_OPTIONS = [
 ]
 
 VOLUME_OPTIONS = [
-    {"label": "Volumen", "value": "volume"},
+    {"label": "Volume", "value": "volume"},
     {"label": "MFI (14)", "value": "mfi"},
 ]
 
@@ -888,7 +890,15 @@ def _price_kpi_strip(contract: dict[str, Any]) -> html.Div:
             html.Div(
                 style=cell_style,
                 children=[
-                    html.Div(label, style={**KPI_LABEL_STYLE, "color": _label_color(tone)}),
+                    html.Div(
+                        contextual_help_label(
+                            label,
+                            family="prices",
+                            section="kpi",
+                            key=metric_id,
+                        ),
+                        style={**KPI_LABEL_STYLE, "color": _label_color(tone)},
+                    ),
                     html.Div(
                         _format_value(metric, signed=metric_id == "change_24h"),
                         style={**KPI_VALUE_STYLE, "color": value_color},
@@ -939,13 +949,13 @@ def _analysis_only_selector_group(checklist: dcc.Checklist) -> html.Div:
         className="prices-analysis-only-group",
         children=[
             html.Div(
-                "ANÁLISIS DERIVADO · PANTALLA B",
+                "DERIVED ANALYSIS · SCREEN B",
                 className="prices-indicator-group-title",
             ),
             html.Div(
                 [
-                    html.Strong("Gráficas independientes."),
-                    " No se superponen ni modifican la lectura de las velas.",
+                    html.Strong("Independent charts."),
+                    " They are not overlaid on or used to modify the candle reading.",
                 ],
                 className="prices-analysis-only-note",
             ),
@@ -968,8 +978,8 @@ def _indicator_panel() -> html.Div:
                 },
                 children=[
                     dcc.Link(
-                        "ANÁLISIS TÉCNICO FUNDAMENTAL",
-                        href=f"{ROUTE}/analysis",
+                        "FUNDAMENTAL TECHNICAL ANALYSIS",
+                        href=localized_href(f"{ROUTE}/analysis"),
                         className="prices-analysis-button",
                         style={
                             "display": "flex",
@@ -982,10 +992,10 @@ def _indicator_panel() -> html.Div:
                     ),
                     html.A(
                         "↗",
-                        href=f"{ROUTE}/analysis",
+                        href=localized_href(f"{ROUTE}/analysis"),
                         target="_blank",
                         rel="noopener noreferrer",
-                        title="Abrir análisis en una nueva pestaña",
+                        title="Open analysis in a new tab",
                         className="prices-analysis-button",
                         style={
                             "display": "flex",
@@ -1009,24 +1019,24 @@ def _indicator_panel() -> html.Div:
             ),
             html.Div(
                 [
-                    "Indicadores ",
-                    html.Span("(Selecciona para mostrar)"),
+                    "INDICATORS ",
+                    html.Span("(Select to display)"),
                 ],
                 className="prices-selector-heading",
             ),
             html.Div(
                 [
                     html.Span("i", className="prices-selector-help-mark"),
-                    html.Span("Selecciona indicadores y abre la pantalla de análisis."),
+                    html.Span("Select indicators and open the analysis screen."),
                 ],
                 className="prices-selector-help",
             ),
             _selector_group(
-                "TENDENCIA",
+                "TREND",
                 _checklist("prices-trend-selectors", TREND_OPTIONS, DEFAULT_TREND),
             ),
             _selector_group(
-                "BANDAS, NIVELES Y CANALES · SOBRE PRECIO",
+                "BANDS, LEVELS & CHANNELS · ON PRICE",
                 _checklist("prices-band-selectors", BAND_OPTIONS, DEFAULT_BANDS),
             ),
             _analysis_only_selector_group(
@@ -1037,15 +1047,15 @@ def _indicator_panel() -> html.Div:
                 )
             ),
             _selector_group(
-                "MOMENTUM · PANTALLA B",
+                "MOMENTUM · SCREEN B",
                 _checklist("prices-momentum-selectors", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
             ),
             _selector_group(
-                "VOLATILIDAD · PANTALLA B",
+                "VOLATILITY · SCREEN B",
                 _checklist("prices-volatility-selectors", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
             ),
             _selector_group(
-                "VOLUMEN",
+                "VOLUME",
                 _checklist("prices-volume-selectors", VOLUME_OPTIONS, DEFAULT_VOLUME),
             ),
         ],
@@ -1720,7 +1730,7 @@ def _add_price_overlays(
 
         regression_series = _safe_dict(regression.get("series"))
         if not regression_series:
-            unavailable.append("CANAL DE REGRESIÓN")
+            unavailable.append("REGRESSION CHANNEL")
         else:
             for name, color in (
                 ("upper", "#f2994a"),
@@ -1912,7 +1922,7 @@ def build_price_figure(
 
     subplot_titles = [""]
     if show_volume:
-        subplot_titles.append("VOLUMEN COMPRA / VENTA")
+        subplot_titles.append("BUY / SELL VOLUME")
     subplot_titles.extend(INDICATOR_TITLES[indicator_id] for indicator_id in oscillators)
 
     fig = make_subplots(
@@ -2071,7 +2081,7 @@ def build_price_figure(
             volume_field = _volume_field(records)
 
             if volume_field is None:
-                unavailable.append("VOLUMEN")
+                unavailable.append("VOLUME")
             else:
                 fig.add_trace(
                     go.Bar(
@@ -2080,11 +2090,11 @@ def build_price_figure(
                             record.get(volume_field)
                             for record in records
                         ],
-                        name="VOLUMEN",
+                        name="VOLUME",
                         marker_color="rgba(127,145,160,0.72)",
                         showlegend=False,
                         hovertemplate=(
-                            "VOLUMEN: %{y:,.2f}"
+                            "VOLUME: %{y:,.2f}"
                             "<extra></extra>"
                         ),
                     ),
@@ -2113,19 +2123,12 @@ def build_price_figure(
         paper_bgcolor="#06111d",
         plot_bgcolor="#06111d",
         font={"family": "Arial, sans-serif", "size": 9, "color": "#aebdca"},
-        margin={"l": 48, "r": 18, "t": 58, "b": 35},
+        margin={"l": 48, "r": 18, "t": 42, "b": 35},
         hovermode="x unified",
         dragmode="pan",
         bargap=0.08,
         barmode="relative",
-        title={
-            "text": "PRICES",
-            "x": 0.0,
-            "xanchor": "left",
-            "y": 0.995,
-            "yanchor": "top",
-            "font": {"size": 10, "color": "#e4edf4"},
-        },
+        title=None,
         legend={
             "orientation": "h",
             "yanchor": "bottom",
@@ -2219,10 +2222,10 @@ ANALYSIS_CARD_NUMBERS = {
 }
 
 SUMMARY_SECTIONS = (
-    ("TENDENCIA", "#00e59b", ("macd", "adx")),
+    ("TREND", "#00e59b", ("macd", "adx")),
     ("MOMENTUM", "#d653ff", ("rsi", "tsi", "stochastic", "williams_r", "cci", "mfi")),
-    ("VOLATILIDAD", "#ffab00", ("atr", "bollinger_band_width")),
-    ("DISTRIBUCIÓN Y FLUJO", "#22c7e8", ("wasserstein_distance",)),
+    ("VOLATILITY", "#ffab00", ("atr", "bollinger_band_width")),
+    ("DISTRIBUTION & FLOW", "#22c7e8", ("wasserstein_distance",)),
 )
 
 SUMMARY_LABELS = {
@@ -2230,7 +2233,7 @@ SUMMARY_LABELS = {
     "adx": "ADX (14)",
     "rsi": "RSI (14)",
     "tsi": "TSI (25,13)",
-    "stochastic": "ESTOCÁSTICO (14,3,3)",
+    "stochastic": "STOCHASTIC (14,3,3)",
     "williams_r": "WILLIAMS %R (14)",
     "cci": "CCI (20)",
     "mfi": "MFI (14)",
@@ -2290,6 +2293,20 @@ def _default_selection_payload() -> dict[str, list[str]]:
         "volatility": list(DEFAULT_VOLATILITY),
         "volume": list(DEFAULT_VOLUME),
     }
+
+
+def _direct_analysis_default_payload() -> dict[str, list[str]]:
+    """Canonical fresh-session Screen B selection.
+
+    Screen A defaults stay unchanged. A direct /prices/analysis route must still
+    expose the six frozen primary Price analyses instead of an empty panel.
+    """
+    payload = _default_selection_payload()
+    payload["derived_analysis"] = ["adx"]
+    payload["momentum"] = ["macd", "rsi", "tsi", "stochastic", "williams_r"]
+    payload["volatility"] = []
+    payload["volume"] = []
+    return payload
 
 
 def _option_ids(options: list[dict[str, str]]) -> set[str]:
@@ -2529,7 +2546,7 @@ def _signal_descriptor(row: dict[str, Any], panel: dict[str, Any], indicator_id:
     state = str(row.get("state") or row.get("display_signal") or "").lower()
 
     if indicator_id == "adx" and state in {"strong", "very_strong", "developing"}:
-        return "TENDENCIA", "#20d05c"
+        return "TREND", "#20d05c"
     if signal in {"bullish", "positive", "buy", "buying"}:
         return "ALCISTA", "#20d05c"
     if signal in {"bearish", "negative", "sell", "selling"}:
@@ -2736,7 +2753,7 @@ def _analysis_figure(
                         for value in current_y
                     ],
                     opacity=.82,
-                    hovertemplate="HISTOGRAMA: %{y:.5f}<extra></extra>",
+                    hovertemplate="HISTOGRAM: %{y:.5f}<extra></extra>",
                     showlegend=False,
                 )
             )
@@ -2860,7 +2877,7 @@ def _analysis_value_rows(
         values = [
             ("MACD", primary_value, "#20d05c"),
             ("SIGNAL", secondary.get("signal"), "#ff9f00"),
-            ("HISTOGRAMA", secondary.get("histogram"), "#20d05c"),
+            ("HISTOGRAM", secondary.get("histogram"), "#20d05c"),
         ]
     elif indicator_id == "adx":
         values = [
@@ -2901,7 +2918,7 @@ def _analysis_value_rows(
 
     children.extend(
         [
-            html.Div("SEÑAL", className="prices-analysis-signal-label"),
+            html.Div("SIGNAL", className="prices-analysis-signal-label"),
             html.Div(
                 signal_text,
                 className="prices-analysis-signal-value",
@@ -2930,8 +2947,12 @@ def _analysis_card(
             html.Div(
                 className="prices-analysis-card-header",
                 children=[
-                    html.Span(f"{number}. {title}"),
-                    html.Span("i", className="prices-analysis-info"),
+                    contextual_help_label(
+                        f"{number}. {title}",
+                        family="prices",
+                        section="screen_b",
+                        key=indicator_id,
+                    ),
                 ],
             ),
             html.Div(
@@ -2968,10 +2989,10 @@ def _summary_panel(
         html.Div(
             className="prices-summary-head",
             children=[
-                html.Span("INDICADOR"),
-                html.Span("VALOR", style={"textAlign": "right"}),
-                html.Span("SEÑAL", style={"textAlign": "right"}),
-                html.Span("FUERZA", style={"textAlign": "right"}),
+                html.Span("INDICATOR"),
+                html.Span("VALUE", style={"textAlign": "right"}),
+                html.Span("SIGNAL", style={"textAlign": "right"}),
+                html.Span("STRENGTH", style={"textAlign": "right"}),
             ],
         )
     ]
@@ -3016,7 +3037,7 @@ def _summary_panel(
     return html.Div(
         className="prices-summary-panel",
         children=[
-            html.Div("RESUMEN DE INDICADORES", className="prices-summary-title"),
+            html.Div("INDICATOR SUMMARY", className="prices-summary-title"),
             *body,
         ],
     )
@@ -3024,17 +3045,17 @@ def _summary_panel(
 
 def _strength_legend() -> html.Div:
     legend_rows = (
-        ("MUY FUERTE", 5, "#20d05c"),
-        ("FUERTE", 4, "#20d05c"),
-        ("MODERADA", 3, "#ffab00"),
-        ("DÉBIL", 2, "#ff8a00"),
-        ("MUY DÉBIL", 1, "#ff3d55"),
+        ("VERY STRONG", 5, "#20d05c"),
+        ("STRONG", 4, "#20d05c"),
+        ("MODERATE", 3, "#ffab00"),
+        ("WEAK", 2, "#ff8a00"),
+        ("VERY WEAK", 1, "#ff3d55"),
     )
 
     return html.Div(
         className="prices-strength-legend",
         children=[
-            html.Div("LEYENDA FUERZA", className="prices-strength-title"),
+            html.Div("STRENGTH LEGEND", className="prices-strength-title"),
             html.Div(
                 className="prices-strength-legend-body",
                 children=[
@@ -3051,8 +3072,8 @@ def _strength_legend() -> html.Div:
                     html.Div(
                         className="prices-strength-copy",
                         children=[
-                            html.P("Basado en la dirección del indicador y la fuerza relativa actual."),
-                            html.P("Los valores pueden cambiar con el próximo cierre de vela."),
+                            html.P("Based on the indicator direction and current relative strength."),
+                            html.P("Values can change with the next candle close."),
                         ],
                     ),
                 ],
@@ -3088,7 +3109,7 @@ def build_analysis_screen(
         )
     else:
         chart_area = html.Div(
-            "No seleccionaste indicadores para la Pantalla B. Regresa a la Pantalla A, marca ADX, Momentum, Volatilidad, MFI o Bollinger Band Width y presiona ANÁLISIS TÉCNICO FUNDAMENTAL.",
+            "No indicators selected for Screen B. Return to Screen A, select ADX, Momentum, Volatility, MFI or Bollinger Band Width and open FUNDAMENTAL TECHNICAL ANALYSIS.",
             className="prices-analysis-empty",
         )
 
@@ -3101,8 +3122,8 @@ def build_analysis_screen(
                     html.Div(
                             children=[
                                 dcc.Link(
-                                    "← REGRESAR",
-                                    href=ROUTE,
+                                    "← BACK",
+                                    href=localized_href(ROUTE),
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
@@ -3158,6 +3179,7 @@ def return_to_prices_screen_a(clicks: int | None):
     Input("market-selector", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
+    Input("url", "search"),
     prevent_initial_call=True,
 )
 def update_price_figure(
@@ -3170,7 +3192,9 @@ def update_price_figure(
     market: str | None,
     timeframe: str | None,
     _reload_clicks: int | None,
+    search: str | None,
 ) -> go.Figure:
+    locale = locale_from_search(search)
     # Pantalla A only renders price overlays and the lower volume panel.
     # Momentum, volatility and MFI are stored for Pantalla B, but they must
     # never be injected into the candlestick screen.
@@ -3190,7 +3214,7 @@ def update_price_figure(
     )
 
     contract = load_contract(CONTRACT_FILE)
-    return build_price_figure(contract, market, timeframe, selected)
+    return localize_figure(build_price_figure(contract, market, timeframe, selected), locale)
 
 
 @callback(
@@ -3235,6 +3259,7 @@ def persist_prices_selection_and_open_analysis(
     Input("market-selector", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
+    Input("url", "search"),
     prevent_initial_call=False,
 )
 def update_analysis_screen(
@@ -3242,14 +3267,20 @@ def update_analysis_screen(
     market: str | None,
     timeframe: str | None,
     _reload_clicks: int | None,
+    search: str | None,
 ) -> html.Div:
+    locale = locale_from_search(search)
     contract = load_contract(CONTRACT_FILE)
-    return build_analysis_screen(
-        contract,
-        market,
-        timeframe,
-        selection or _default_selection_payload(),
-    )
+    with locale_context(locale):
+        return localize_component_tree(
+            build_analysis_screen(
+                contract,
+                market,
+                timeframe,
+                selection or _default_selection_payload(),
+            ),
+            locale,
+        )
 
 
 def _prices_stylesheet() -> html.Link:
@@ -3282,7 +3313,7 @@ def render(
         )
 
     if view == "analysis":
-        default_payload = _default_selection_payload()
+        default_payload = _direct_analysis_default_payload()
         return screen_page(
             _prices_stylesheet(),
             dcc.Store(
@@ -3327,6 +3358,15 @@ def render(
                 html.Div(
                     className="prices-chart-card",
                     children=[
+                        html.Div(
+                            contextual_help_label(
+                                "PRICES / OHLCV",
+                                family="prices",
+                                section="screen_a",
+                                key="price_ohlcv",
+                            ),
+                            className="context-help-card-title",
+                        ),
                         dcc.Graph(
                             id="prices-main-graph",
                             figure=build_price_figure(

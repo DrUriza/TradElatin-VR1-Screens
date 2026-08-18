@@ -17,6 +17,8 @@ from screen_core.components import (
     screen_page,
     two_column,
 )
+from screen_core.contextual_help import contextual_help_label
+from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
@@ -55,7 +57,7 @@ TREND_OPTIONS = [
 
 BAND_OPTIONS = [
     {"label": "Bollinger Bands (20, 2)", "value": "bollinger_bands"},
-    {"label": "Canal de Regresión", "value": "regression_channel"},
+    {"label": "Regression Channel", "value": "regression_channel"},
 ]
 
 DERIVED_ANALYSIS_OPTIONS = [
@@ -891,7 +893,15 @@ def _open_interest_kpi_strip(contract: dict[str, Any]) -> html.Div:
             html.Div(
                 style=cell_style,
                 children=[
-                    html.Div(label, style={**KPI_LABEL_STYLE, "color": _label_color(tone)}),
+                    html.Div(
+                        contextual_help_label(
+                            label,
+                            family="open_interest",
+                            section="kpi",
+                            key=metric_id,
+                        ),
+                        style={**KPI_LABEL_STYLE, "color": _label_color(tone)},
+                    ),
                     html.Div(
                         _format_value(metric, signed=metric_id == "change_24h"),
                         style={**KPI_VALUE_STYLE, "color": value_color},
@@ -942,13 +952,13 @@ def _analysis_only_selector_group(checklist: dcc.Checklist) -> html.Div:
         className="oi-analysis-only-group",
         children=[
             html.Div(
-                "ANÁLISIS DERIVADO · PANTALLA B",
+                "DERIVED ANALYSIS · SCREEN B",
                 className="oi-indicator-group-title",
             ),
             html.Div(
                 [
-                    html.Strong("Gráficas independientes."),
-                    " No se superponen ni modifican la lectura de las velas.",
+                    html.Strong("Independent charts."),
+                    " They are not overlaid on or used to modify the candle reading.",
                 ],
                 className="oi-analysis-only-note",
             ),
@@ -971,8 +981,8 @@ def _indicator_panel() -> html.Div:
                 },
                 children=[
                     dcc.Link(
-                        "ANÁLISIS TÉCNICO FUNDAMENTAL",
-                        href=f"{ROUTE}/analysis",
+                        "FUNDAMENTAL TECHNICAL ANALYSIS",
+                        href=localized_href(f"{ROUTE}/analysis"),
                         className="oi-analysis-button",
                         style={
                             "display": "flex",
@@ -985,10 +995,10 @@ def _indicator_panel() -> html.Div:
                     ),
                     html.A(
                         "↗",
-                        href=f"{ROUTE}/analysis",
+                        href=localized_href(f"{ROUTE}/analysis"),
                         target="_blank",
                         rel="noopener noreferrer",
-                        title="Abrir análisis en una nueva pestaña",
+                        title="Open analysis in a new tab",
                         className="oi-analysis-button",
                         style={
                             "display": "flex",
@@ -1012,28 +1022,28 @@ def _indicator_panel() -> html.Div:
             ),
             html.Div(
                 [
-                    "Indicadores ",
-                    html.Span("(Selecciona para mostrar)"),
+                    "INDICATORS ",
+                    html.Span("(Select to display)"),
                 ],
                 className="oi-selector-heading",
             ),
             html.Div(
                 [
                     html.Span("i", className="oi-selector-help-mark"),
-                    html.Span("Selecciona indicadores y abre la pantalla de análisis."),
+                    html.Span("Select indicators and open the analysis screen."),
                 ],
                 className="oi-selector-help",
             ),
             _selector_group(
-                "TENDENCIA",
+                "TREND",
                 _checklist("oi-trend-selectors", TREND_OPTIONS, DEFAULT_TREND),
             ),
             _selector_group(
-                "BANDAS Y CANALES · SOBRE OPEN INTEREST",
+                "BANDS & CHANNELS · ON OPEN INTEREST",
                 _checklist("oi-band-selectors", BAND_OPTIONS, DEFAULT_BANDS),
             ),
             _selector_group(
-                "DINÁMICA DE PARTICIPACIÓN · PANTALLA B",
+                "PARTICIPATION DYNAMICS · SCREEN B",
                 _checklist(
                     "oi-derived-selectors",
                     DERIVED_ANALYSIS_OPTIONS,
@@ -1041,11 +1051,11 @@ def _indicator_panel() -> html.Div:
                 ),
             ),
             _selector_group(
-                "PRICE × PARTICIPACIÓN · PANTALLA B",
+                "PRICE × PARTICIPATION · SCREEN B",
                 _checklist("oi-momentum-selectors", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
             ),
             _selector_group(
-                "LEVERAGE / CAMBIO DE RÉGIMEN · PANTALLA B",
+                "LEVERAGE / REGIME CHANGE · SCREEN B",
                 _checklist("oi-volatility-selectors", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
             ),
             html.Div(
@@ -1504,7 +1514,7 @@ def _add_screen_a_cross_markers_legacy(
                 hovertemplate=(
                     "<b>%{customdata[0]}</b>"
                     "<br>Evento: %{customdata[1]}"
-                    "<br>Señal: %{customdata[2]}"
+                    "<br>Signal: %{customdata[2]}"
                     "<br>Serie 1: %{customdata[3]}"
                     "<br>Serie 2: %{customdata[4]}"
                     "<br>%{x|%Y-%m-%d %H:%M UTC}"
@@ -1690,7 +1700,7 @@ def _add_price_overlays(
 
         regression_series = _safe_dict(regression.get("series"))
         if not regression_series:
-            unavailable.append("CANAL DE REGRESIÓN")
+            unavailable.append("REGRESSION CHANNEL")
         else:
             for name, color in (
                 ("upper", "#f2994a"),
@@ -1999,10 +2009,10 @@ ANALYSIS_CARD_NUMBERS = {
 }
 
 SUMMARY_SECTIONS = (
-    ("DINÁMICA DE PARTICIPACIÓN", "#22c7e8", ("oi_dynamics", "oi_zscore_percentile")),
-    ("PRICE × PARTICIPACIÓN", "#00e59b", ("price_oi_regime", "price_oi_divergence")),
+    ("PARTICIPATION DYNAMICS", "#22c7e8", ("oi_dynamics", "oi_zscore_percentile")),
+    ("PRICE × PARTICIPATION", "#00e59b", ("price_oi_regime", "price_oi_divergence")),
     ("LEVERAGE / CROWDING", "#ffab00", ("funding_oi_crowding",)),
-    ("CAMBIO DE RÉGIMEN", "#a879ff", ("wasserstein_distance",)),
+    ("REGIME CHANGE", "#a879ff", ("wasserstein_distance",)),
 )
 
 SUMMARY_LABELS = {
@@ -2251,16 +2261,16 @@ def _signal_descriptor(row: dict[str, Any], panel: dict[str, Any], indicator_id:
     state = str(row.get("state") or row.get("display_signal") or "").lower()
 
     native_states = {
-        "expanding": ("EXPANSIÓN", "#00e59b"),
-        "contracting": ("CONTRACCIÓN", "#ffab00"),
-        "bullish_expansion": ("EXPANSIÓN ALCISTA", "#00e59b"),
-        "bearish_expansion": ("EXPANSIÓN BAJISTA", "#ff4d6d"),
+        "expanding": ("EXPANDING", "#00e59b"),
+        "contracting": ("CONTRACTING", "#ffab00"),
+        "bullish_expansion": ("BULLISH EXPANSION", "#00e59b"),
+        "bearish_expansion": ("BEARISH EXPANSION", "#ff4d6d"),
         "short_covering": ("SHORT COVERING", "#2f80ff"),
         "long_liquidation": ("LONG DELEVERAGING", "#ff8a3d"),
         "long_crowding": ("LONG CROWDING", "#ff8a3d"),
         "short_crowding": ("SHORT CROWDING", "#a879ff"),
         "divergence": ("DIVERGENCIA", "#ff4d6d"),
-        "confirmation": ("CONFIRMACIÓN", "#00e59b"),
+        "confirmation": ("CONFIRMATION", "#00e59b"),
         "regime_shift": ("REGIME SHIFT", "#ff4d6d"),
         "normal": ("NORMAL", "#22c7e8"),
     }
@@ -2268,7 +2278,7 @@ def _signal_descriptor(row: dict[str, Any], panel: dict[str, Any], indicator_id:
         return native_states[state]
 
     if indicator_id == "adx" and state in {"strong", "very_strong", "developing"}:
-        return "TENDENCIA", "#20d05c"
+        return "TREND", "#20d05c"
     if signal in {"bullish", "positive", "buy", "buying"}:
         return "ALCISTA", "#20d05c"
     if signal in {"bearish", "negative", "sell", "selling"}:
@@ -2513,12 +2523,12 @@ def _add_analysis_cross_markers(
 
     marker_specs = {
         "bullish": {
-            "name": "COMPRA",
+            "name": "BUY",
             "symbol": "arrow-up",
             "color": "#00e59b",
         },
         "bearish": {
-            "name": "VENTA",
+            "name": "SELL",
             "symbol": "arrow-down",
             "color": "#ff4d6d",
         },
@@ -2591,7 +2601,7 @@ def _analysis_figure(
                         for value in current_y
                     ],
                     opacity=.82,
-                    hovertemplate="HISTOGRAMA: %{y:.5f}<extra></extra>",
+                    hovertemplate="HISTOGRAM: %{y:.5f}<extra></extra>",
                     showlegend=False,
                 )
             )
@@ -2736,7 +2746,7 @@ def _analysis_value_rows(
     elif indicator_id == "price_oi_regime":
         values = [
             ("REGIME SCORE", primary_value, ANALYSIS_LINE_COLORS["regime_score"]),
-            ("ESTADO", secondary.get("regime_state"), "#e4edf4"),
+            ("STATE", secondary.get("regime_state"), "#e4edf4"),
         ]
     elif indicator_id == "price_oi_divergence":
         values = [
@@ -2771,7 +2781,7 @@ def _analysis_value_rows(
 
     children.extend(
         [
-            html.Div("SEÑAL", className="oi-analysis-signal-label"),
+            html.Div("SIGNAL", className="oi-analysis-signal-label"),
             html.Div(
                 signal_text,
                 className="oi-analysis-signal-value",
@@ -2800,8 +2810,12 @@ def _analysis_card(
             html.Div(
                 className="oi-analysis-card-header",
                 children=[
-                    html.Span(f"{number}. {title}"),
-                    html.Span("i", className="oi-analysis-info"),
+                    contextual_help_label(
+                        f"{number}. {title}",
+                        family="open_interest",
+                        section="screen_b",
+                        key=indicator_id,
+                    ),
                 ],
             ),
             html.Div(
@@ -2838,10 +2852,10 @@ def _summary_panel(
         html.Div(
             className="oi-summary-head",
             children=[
-                html.Span("INDICADOR"),
-                html.Span("VALOR", style={"textAlign": "right"}),
-                html.Span("SEÑAL", style={"textAlign": "right"}),
-                html.Span("FUERZA", style={"textAlign": "right"}),
+                html.Span("INDICATOR"),
+                html.Span("VALUE", style={"textAlign": "right"}),
+                html.Span("SIGNAL", style={"textAlign": "right"}),
+                html.Span("STRENGTH", style={"textAlign": "right"}),
             ],
         )
     ]
@@ -2886,7 +2900,7 @@ def _summary_panel(
     return html.Div(
         className="oi-summary-panel",
         children=[
-            html.Div("RESUMEN DE INDICADORES", className="oi-summary-title"),
+            html.Div("INDICATOR SUMMARY", className="oi-summary-title"),
             *body,
         ],
     )
@@ -2894,17 +2908,17 @@ def _summary_panel(
 
 def _strength_legend() -> html.Div:
     legend_rows = (
-        ("MUY FUERTE", 5, "#20d05c"),
-        ("FUERTE", 4, "#20d05c"),
-        ("MODERADA", 3, "#ffab00"),
-        ("DÉBIL", 2, "#ff8a00"),
-        ("MUY DÉBIL", 1, "#ff3d55"),
+        ("VERY STRONG", 5, "#20d05c"),
+        ("STRONG", 4, "#20d05c"),
+        ("MODERATE", 3, "#ffab00"),
+        ("WEAK", 2, "#ff8a00"),
+        ("VERY WEAK", 1, "#ff3d55"),
     )
 
     return html.Div(
         className="oi-strength-legend",
         children=[
-            html.Div("LEYENDA FUERZA", className="oi-strength-title"),
+            html.Div("STRENGTH LEGEND", className="oi-strength-title"),
             html.Div(
                 className="oi-strength-legend-body",
                 children=[
@@ -2921,8 +2935,8 @@ def _strength_legend() -> html.Div:
                     html.Div(
                         className="oi-strength-copy",
                         children=[
-                            html.P("Basado en la dirección del indicador y la fuerza relativa actual."),
-                            html.P("Los valores pueden cambiar con el próximo cierre de vela."),
+                            html.P("Based on the indicator direction and current relative strength."),
+                            html.P("Values can change with the next candle close."),
                         ],
                     ),
                 ],
@@ -2958,7 +2972,7 @@ def build_analysis_screen(
         )
     else:
         chart_area = html.Div(
-            "No seleccionaste métricas para la Pantalla B. Regresa a la Pantalla A, selecciona Dinámica, Price × Participación, Crowding o Regime Shift y abre el análisis.",
+            "No metrics selected for Screen B. Return to Screen A, select Dynamics, Price × Participation, Crowding or Regime Shift and open the analysis.",
             className="oi-analysis-empty",
         )
 
@@ -2971,8 +2985,8 @@ def build_analysis_screen(
                     html.Div(
                             children=[
                                 dcc.Link(
-                                    "← REGRESAR",
-                                    href=ROUTE,
+                                    "← BACK",
+                                    href=localized_href(ROUTE),
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
@@ -3028,6 +3042,7 @@ def return_to_oi_screen_a(clicks: int | None):
     Input("market-selector", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
+    Input("url", "search"),
     prevent_initial_call=True,
 )
 def update_open_interest_figure(
@@ -3040,14 +3055,16 @@ def update_open_interest_figure(
     market: str | None,
     timeframe: str | None,
     _reload_clicks: int | None,
+    search: str | None,
 ) -> go.Figure:
+    locale = locale_from_search(search)
     del derived_values, momentum_values, volatility_values, native_values
     selected = _unique([
         *(trend_values or []),
         *(band_values or []),
     ])
     contract = load_contract(CONTRACT_FILE)
-    return build_open_interest_figure(contract, market, timeframe, selected)
+    return localize_figure(build_open_interest_figure(contract, market, timeframe, selected), locale)
 
 
 @callback(
@@ -3092,6 +3109,7 @@ def persist_open_interest_selection_and_open_analysis(
     Input("market-selector", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
+    Input("url", "search"),
     prevent_initial_call=False,
 )
 def update_analysis_screen(
@@ -3099,14 +3117,20 @@ def update_analysis_screen(
     market: str | None,
     timeframe: str | None,
     _reload_clicks: int | None,
+    search: str | None,
 ) -> html.Div:
+    locale = locale_from_search(search)
     contract = load_contract(CONTRACT_FILE)
-    return build_analysis_screen(
-        contract,
-        market,
-        timeframe,
-        selection or _default_selection_payload(),
-    )
+    with locale_context(locale):
+        return localize_component_tree(
+            build_analysis_screen(
+                contract,
+                market,
+                timeframe,
+                selection or _default_selection_payload(),
+            ),
+            locale,
+        )
 
 
 def _open_interest_stylesheet() -> html.Link:
@@ -3178,7 +3202,12 @@ def render(
                     className="oi-chart-card",
                     children=[
                         html.Div(
-                            "OPEN INTEREST",
+                            contextual_help_label(
+                                "OPEN INTEREST",
+                                family="open_interest",
+                                section="screen_a",
+                                key="open_interest_ohlc",
+                            ),
                             className="oi-main-chart-header",
                             title="OPEN INTEREST",
                         ),

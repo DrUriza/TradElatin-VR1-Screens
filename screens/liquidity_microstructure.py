@@ -7,7 +7,9 @@ import plotly.graph_objects as go
 from dash import dcc, html
 
 from screen_core.components import kpi_grid, reference_gallery, screen_header, screen_page
+from screen_core.contextual_help import contextual_help_label
 from screen_core.figures import apply_analysis_figure_layout
+from screen_core.i18n import tr
 
 ROUTE = "/liquidity"
 LABEL = "Liquidity"
@@ -194,7 +196,7 @@ def _profile_figure(chart: dict[str, Any]) -> go.Figure:
             "color": _MUTED,
         },
         yaxis={
-            "title": "BTC (Acumulado)",
+            "title": "BTC (Cumulative)",
             "showgrid": True,
             "gridcolor": "rgba(255,255,255,0.05)",
             "zeroline": False,
@@ -231,7 +233,12 @@ def _chart_card(
                     html.Div(
                         [
                             html.Div(
-                                f"{ordinal}. {panel_title}",
+                                contextual_help_label(
+                                    f"{ordinal}. {panel_title}",
+                                    family="liquidity",
+                                    section="screen_a",
+                                    key=str(chart.get("chart_id") or chart.get("id") or "order_depth"),
+                                ),
                                 style={"fontWeight": 700, "fontSize": "16px", "color": _TEXT},
                             ),
                             html.Div(
@@ -372,7 +379,12 @@ def _executed_operations_card(chart: dict[str, Any]) -> html.Div:
             html.Div(
                 [
                     html.Div(
-                        "4. EXECUTED LIQUIDITY / OPERATIONS",
+                        contextual_help_label(
+                            "4. EXECUTED LIQUIDITY / OPERATIONS",
+                            family="liquidity",
+                            section="screen_a",
+                            key="executed_operations",
+                        ),
                         style={"fontWeight": 700, "fontSize": "16px", "color": _TEXT},
                     ),
                     html.Div(
@@ -504,9 +516,9 @@ def _orderbook_table_card(table: dict[str, Any]) -> html.Div:
     columns = _display_columns(
         table,
         [
-            ("price", "Precio (USDT)"),
-            ("quantity_base", "Tamaño (BTC)"),
-            ("cumulative_quantity_base", "Acumulado (BTC)"),
+            ("price", "Price (USDT)"),
+            ("quantity_base", "Size (BTC)"),
+            ("cumulative_quantity_base", "Cumulative (BTC)"),
         ],
     )[:3]
     bids = [_dict(row) for row in _list(table.get("bids"))]
@@ -644,7 +656,7 @@ def _event_table_card(table: dict[str, Any], fallback_title: str) -> html.Div:
                 [
                     html.Span(str(table.get("title") or fallback_title)),
                     html.Span(
-                        f"{min(len(rows), display_limit)} / {len(rows)} visibles",
+                        f"{min(len(rows), display_limit)} / {len(rows)} {tr('visible')}",
                         style={
                             "fontSize": "8px",
                             "fontWeight": 500,
@@ -788,12 +800,12 @@ def _native_line_figure(
     return apply_analysis_figure_layout(fig)
 
 
-def _analysis_card(title: str, subtitle: str, figure: go.Figure) -> html.Div:
+def _analysis_card(title: str, subtitle: str, figure: go.Figure, help_key: str | None = None) -> html.Div:
     return html.Div(
         [
             html.Div(
                 [
-                    html.Div(title, style={"fontSize": "11px", "fontWeight": 800, "color": _TEXT}),
+                    html.Div(contextual_help_label(title, family="liquidity", section="screen_b", key=help_key or title.lower()), style={"fontSize": "11px", "fontWeight": 800, "color": _TEXT}),
                     html.Div(subtitle, style={"fontSize": "8px", "color": _MUTED, "marginTop": "2px"}),
                 ],
                 style={"padding": "9px 10px 4px"},
@@ -916,12 +928,12 @@ def _analysis_view(contract: dict[str, Any]) -> html.Div:
 
     grid = html.Div(
         [
-            _analysis_card("DEPTH IMBALANCE / PRESSURE", "Bid/ask depth asymmetry and normalized pressure", depth),
-            _analysis_card("SPREAD × MARKET IMPACT / LIQUIDITY STRESS", "Execution friction and deterioration of available liquidity", stress),
-            _analysis_card("LIQUIDITY WALL / CONCENTRATION + VACUUM", "Resting walls and thin-book directional gaps", walls),
-            _analysis_card("WHALE PERSISTENCE / CANCELLATION ACTIVITY", "Persistence of large resting orders versus rapid withdrawal", whale),
-            _analysis_card("EXECUTED LIQUIDITY / ABSORPTION", "Aggressive flow absorbed by visible opposing liquidity", absorption),
-            _analysis_card("LIQUIDITY REGIME / HMI + WASSERSTEIN", "Composite microstructure state and regime displacement", regime),
+            _analysis_card("DEPTH IMBALANCE / PRESSURE", "Bid/ask depth asymmetry and normalized pressure", depth, "depth_imbalance_pressure"),
+            _analysis_card("SPREAD × MARKET IMPACT / LIQUIDITY STRESS", "Execution friction and deterioration of available liquidity", stress, "spread_market_impact_liquidity_stress"),
+            _analysis_card("LIQUIDITY WALL / CONCENTRATION + VACUUM", "Resting walls and thin-book directional gaps", walls, "liquidity_wall_concentration_vacuum"),
+            _analysis_card("WHALE PERSISTENCE / CANCELLATION ACTIVITY", "Persistence of large resting orders versus rapid withdrawal", whale, "whale_persistence_cancellation"),
+            _analysis_card("EXECUTED LIQUIDITY / ABSORPTION", "Aggressive flow absorbed by visible opposing liquidity", absorption, "executed_liquidity_absorption"),
+            _analysis_card("LIQUIDITY REGIME / HMI + WASSERSTEIN", "Composite microstructure state and regime displacement", regime, "liquidity_regime_hmi"),
         ],
         className="analysis-grid",
     )
@@ -958,7 +970,7 @@ def render(
                 _dict(charts.get("order_depth")),
                 1,
                 "ORDER BOOK",
-                "Profundidad acumulada del libro",
+                "Accumulated order-book depth",
                 "liquidity-order-depth",
             ),
             _chart_card(
@@ -966,7 +978,7 @@ def render(
                 _dict(charts.get("whale_liquidity_profile")),
                 2,
                 "WHALE ORDERS",
-                "Órdenes de tamaño extraordinario y liquidez asociada",
+                "Large resting orders and associated liquidity",
                 "liquidity-whale-profile",
             ),
             _chart_card(
@@ -974,7 +986,7 @@ def render(
                 _dict(charts.get("executed_liquidity_profile")),
                 3,
                 "LARGE TRADES",
-                "Operaciones grandes ejecutadas y liquidez consumida",
+                "Large executed trades and consumed liquidity",
                 "liquidity-executed-profile",
             ),
         ],
@@ -998,7 +1010,7 @@ def render(
 
     return screen_page(
         screen_header(selected_contract),
-        kpi_grid(selected_contract.get("kpis")),
+        kpi_grid(selected_contract.get("kpis"), help_family="liquidity"),
         chart_row,
         table_row,
         executed_operations,
