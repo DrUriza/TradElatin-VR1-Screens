@@ -410,12 +410,12 @@ OPEN_INTEREST_LOCAL_CSS = """
 .oi-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 310px;
+    min-height: 215px;
 }
 
 .oi-analysis-card-graph {
     min-width: 0;
-    height: 310px;
+    height: 215px;
 }
 
 .oi-analysis-card-values {
@@ -2670,10 +2670,10 @@ def _analysis_figure(
     ]
 
     fig.update_layout(
-        height=310,
+        height=215,
         paper_bgcolor="#04111c",
         plot_bgcolor="#04111c",
-        margin={"l": 30, "r": 5, "t": 6, "b": 18},
+        margin={"l": 30, "r": 5, "t": 5, "b": 16},
         font={"family": "Arial, sans-serif", "size": 7, "color": "#8fa0ab"},
         hovermode="x unified",
         bargap=.08,

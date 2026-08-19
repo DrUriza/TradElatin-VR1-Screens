@@ -80,7 +80,7 @@ def test_main_and_analysis_views_expose_context_help():
         (etf_exchange_flows, None, 12, 6),
         (on_chain_miners, None, 9, 6),
         (volatility_market_regimes, None, 10, 6),
-        (long_short_liquidations, None, 15, 6),
+        (long_short_liquidations, None, 4, 17),
         (liquidity_microstructure, "perpetual", 10, 6),
     )
 

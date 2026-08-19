@@ -23,14 +23,14 @@ SERIES_COLORS = [CYAN, PURPLE, AMBER, GREEN, RED, BLUE, "#d178ff", "#7bdff2", "#
 
 
 def apply_analysis_figure_layout(
-    fig: go.Figure, *, height: int = 310, legend_y: float = 1.12,
+    fig: go.Figure, *, height: int = 215, legend_y: float = 1.12,
     right_margin: int = 30,
 ) -> go.Figure:
     """Apply shared Screen B presentation without changing chart data."""
     fig.update_layout(
         title=None,
         height=height,
-        margin={"l": 40, "r": right_margin, "t": 82, "b": 40},
+        margin={"l": 40, "r": right_margin, "t": 55, "b": 32},
         showlegend=True,
         legend={
             "orientation": "h", "yanchor": "bottom", "y": legend_y,

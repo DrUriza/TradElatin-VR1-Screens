@@ -63,7 +63,7 @@ a { color: inherit; text-decoration: none; }
 .reload-button:hover { background: rgba(34, 199, 255, .14); }
 .revision-text { display: none; }
 
-.page-content { padding: 8px 14px 28px; max-width: none; margin: 0; }
+.page-content { padding: 6px 12px 12px; max-width: none; margin: 0; }
 .screen-page { display: flex; flex-direction: column; gap: 7px; }
 .screen-heading { min-height: 62px; border: 1px solid var(--border); background: linear-gradient(90deg, rgba(8, 31, 47, .92), rgba(4, 16, 27, .92)); display: flex; justify-content: space-between; align-items: center; padding: 7px 12px; }
 .screen-heading-main { min-width: 0; }
@@ -98,20 +98,20 @@ a { color: inherit; text-decoration: none; }
 .state-neutral { color: var(--cyan); }
 .kpi-secondary { color: var(--muted); font-size: 7px; }
 
-.dashboard-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: stretch; }
 .span-3 { grid-column: span 3; min-width: 0; }
 .span-4 { grid-column: span 4; min-width: 0; }
 .span-8 { grid-column: span 8; min-width: 0; }
 .span-9 { grid-column: span 9; min-width: 0; }
-.three-panel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.two-panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.two-by-two-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.three-panel-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.two-panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.two-by-two-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .panel-card, .analysis-chart-card, .analysis-empty-card, .reference-card { min-width: 0; border: 1px solid var(--border); background: var(--panel); box-shadow: inset 0 1px rgba(255, 255, 255, .01); }
 .panel-card { overflow: hidden; }
 .panel-status-warning { border-top-color: var(--amber); }
 .panel-status-danger { border-top-color: var(--red); }
 .contract-graph { width: 100%; }
-.panel-title, .panel-section-title { color: #cfe1ef; font-size: 9px; font-weight: 700; letter-spacing: .45px; padding: 10px 11px; border-bottom: 1px solid var(--border-soft); }
+.panel-title, .panel-section-title { color: #cfe1ef; font-size: 9px; font-weight: 700; letter-spacing: .45px; min-height: 26px; padding: 5px 9px; border-bottom: 1px solid var(--border-soft); }
 .table-card { padding-bottom: 4px; }
 .indicator-panel { height: 100%; padding: 9px; }
 .side-panel-stack { display: flex; flex-direction: column; gap: 8px; height: 100%; }
@@ -127,7 +127,7 @@ a { color: inherit; text-decoration: none; }
 .contract-note { display: flex; align-items: center; gap: 10px; border: 1px solid rgba(245, 165, 36, .3); background: rgba(245, 165, 36, .055); padding: 8px 10px; }
 .contract-note-label { color: var(--amber); font-size: 8px; font-weight: 800; letter-spacing: .6px; white-space: nowrap; }
 .contract-note-text { color: #b9c6d0; font-size: 9px; }
-.analysis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.analysis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .analysis-empty-card { min-height: 215px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 14px; }
 .analysis-empty-title { font-size: 10px; color: var(--text); margin-bottom: 12px; }
 .analysis-empty-status { color: var(--red); font-size: 9px; font-weight: 800; letter-spacing: .7px; }
@@ -146,7 +146,7 @@ a { color: inherit; text-decoration: none; }
 
 .app-footer { min-height: 34px; border-top: 1px solid var(--border); color: #60788c; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 0 18px; font-size: 7px; letter-spacing: .35px; }
 
-@media (max-width: 1180px) {
+@media (max-width: 1179px) {
   .topbar { gap: 8px; }
   .brand-block { min-width: 145px; }
   .nav-link { padding-left: 7px; padding-right: 7px; }

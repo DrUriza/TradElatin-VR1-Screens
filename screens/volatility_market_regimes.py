@@ -50,22 +50,29 @@ ANALYSIS_ORDER = [
 
 CSS = """
 .vol-native-main {display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:8px;align-items:start;}
-.vol-native-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,318px);gap:8px;align-items:stretch;}
-.vol-native-card {border:1px solid #173247;background:#06111d;min-width:0;min-height:318px;height:318px;display:flex;flex-direction:column;overflow:hidden;}
-.vol-native-card .dash-graph {flex:1 1 auto;min-height:291px;height:291px;width:100%;}
-.vol-native-panel {border:1px solid #173247;background:#06111d;padding:10px;min-height:644px;}
+.vol-native-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,252px);gap:6px;align-items:stretch;}
+.vol-native-card {border:1px solid #173247;background:#06111d;min-width:0;min-height:252px;height:252px;display:flex;flex-direction:column;overflow:hidden;}
+.vol-native-card .dash-graph {flex:1 1 auto;min-height:225px;height:225px;width:100%;}
+.vol-native-panel {border:1px solid #173247;background:#06111d;padding:8px;min-height:510px;}
 .vol-native-panel h3 {font-size:11px;color:#57a8ff;margin:0 0 8px;text-transform:uppercase;}
 .vol-native-section {border-top:1px solid #173247;padding-top:8px;margin-top:8px;}
 .vol-native-label {font-size:8px;color:#718da3;text-transform:uppercase;margin-bottom:5px;}
 .vol-native-note {font-size:8px;color:#7f96aa;line-height:1.45;margin:7px 0;}
 .vol-native-check label {font-size:9px;color:#d9e8f5;margin-right:8px;display:block;margin-bottom:6px;}
 .vol-native-link {display:block;text-align:center;border:1px solid #2f80ff;color:#62afff;text-decoration:none;font-size:10px;font-weight:700;padding:8px;margin-bottom:10px;}
-.vol-analysis-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;min-width:0;}
+.vol-analysis-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;min-width:0;}
 .vol-analysis-card {border:1px solid #173247;background:#06111d;min-width:0;}
 .vol-analysis-title {height:26px;display:flex;align-items:center;padding:0 8px;font-size:8px;color:#8cb3d2;border-bottom:1px solid #173247;text-transform:uppercase;}
+.vol-analysis-layout {display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:8px;align-items:start;}
+.vol-summary-panel {border:1px solid #173247;background:#071522;padding:8px;min-width:0;}
+.vol-summary-title {color:#4da3ff;font-size:10px;font-weight:700;margin-bottom:7px;}
+.vol-summary-row {padding:6px 0;border-top:1px solid rgba(23,50,71,.7);}
+.vol-summary-name {color:#d9e8f5;font-size:8px;font-weight:700;}
+.vol-summary-meta {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px;margin-top:2px;color:#7f96aa;font-size:8px;}
+.vol-summary-value {color:#fff;font-weight:800;}
 .vol-analysis-back {display:inline-block;border:1px solid #2f80ff;color:#62afff;text-decoration:none;padding:6px 12px;font-size:9px;font-weight:700;margin-bottom:8px;}
-@media (max-width:1100px){.vol-native-main{grid-template-columns:1fr}.vol-native-panel{min-height:auto}.vol-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-@media (max-width:760px){.vol-native-grid,.vol-analysis-grid{grid-template-columns:1fr}.vol-native-grid{grid-template-rows:none}.vol-native-card{height:318px;min-height:318px;}}
+@media (max-width:1100px){.vol-native-main,.vol-analysis-layout{grid-template-columns:1fr}.vol-native-panel{min-height:auto}.vol-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+@media (max-width:760px){.vol-native-grid,.vol-analysis-grid{grid-template-columns:1fr}.vol-native-grid{grid-template-rows:none}.vol-native-card{height:auto;min-height:252px;}}
 """
 
 
@@ -138,7 +145,7 @@ VOL_SCREEN_A_LABELS = {
 
 def _screen_a_card(contract: dict[str, Any], chart_id: str, range_id: str | None) -> html.Div:
     figure = _screen_a_figure(contract, chart_id, range_id)
-    figure.update_layout(title=None, margin={"l": 40, "r": 28, "t": 40, "b": 35})
+    figure.update_layout(height=225, title=None, margin={"l": 40, "r": 28, "t": 45, "b": 32})
     return html.Div(
         className="vol-native-card",
         children=[
@@ -154,7 +161,7 @@ def _screen_a_card(contract: dict[str, Any], chart_id: str, range_id: str | None
             dcc.Graph(
                 figure=figure,
                 config={"displaylogo": False, "responsive": True},
-                style={"height": "291px", "minHeight": "291px", "width": "100%"},
+                style={"height": "225px", "minHeight": "225px", "width": "100%"},
             ),
         ],
     )
@@ -184,7 +191,7 @@ def _analysis_figure(block: dict[str, Any], indicator_id: str, range_id: str | N
         trace.name = compact.get(str(trace.name), str(trace.name).title())
         if indicator_id == "volatility_skew_tail_risk" and trace.name == "Upside IV":
             trace.visible = "legendonly"
-    _base_layout(fig, None, height=310)
+    _base_layout(fig, None, height=215)
     return apply_analysis_figure_layout(fig, right_margin=38)
 
 def _selection_panel() -> html.Div:
@@ -203,15 +210,29 @@ def _selection_panel() -> html.Div:
     return html.Div(className="vol-native-panel",children=children)
 
 def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: list[str] | None) -> html.Div:
-    selected=set(selection or ANALYSIS_ORDER)
+    selected_ids=[iid for iid in ANALYSIS_ORDER if iid in set(selection or [])] or list(ANALYSIS_ORDER)
+    selected=set(selected_ids)
     ind=_safe_dict(_safe_dict(contract.get("volatility_analysis")).get("indicators"))
     cards=[]
     for iid in ANALYSIS_ORDER:
         if iid not in selected: continue
         block=_safe_dict(ind.get(iid))
         title_text = f"{str(block.get('section') or 'ANALYSIS')} · {str(block.get('label') or iid).upper()}"
-        cards.append(html.Div(className="vol-analysis-card",children=[html.Div(contextual_help_label(title_text, family="volatility", section="screen_b", key=iid), className="vol-analysis-title"),dcc.Graph(figure=_analysis_figure(block,iid,range_id),config={"displaylogo":False,"responsive":True},style={"height":"310px"})]))
-    return html.Div(children=[dcc.Link("← BACK",href=localized_href(ROUTE),className="vol-analysis-back"),html.Div(className="vol-analysis-grid",children=cards)])
+        cards.append(html.Div(className="vol-analysis-card",children=[html.Div(contextual_help_label(title_text, family="volatility", section="screen_b", key=iid), className="vol-analysis-title"),dcc.Graph(figure=_analysis_figure(block,iid,range_id),config={"displaylogo":False,"responsive":True},style={"height":"215px","minHeight":"215px"})]))
+    summary_rows=[]
+    for iid in selected_ids:
+        summary=_safe_dict(_safe_dict(ind.get(iid)).get("summary"))
+        strength=summary.get("strength")
+        summary_rows.append(html.Div(className="vol-summary-row",children=[
+            html.Div(str(summary.get("label") or iid.replace("_"," ").title()),className="vol-summary-name"),
+            html.Div(className="vol-summary-meta",children=[
+                html.Span(str(summary.get("display_value") or "—"),className="vol-summary-value"),
+                html.Span(str(summary.get("signal") or "—")),
+                html.Span(f"STRENGTH {strength if strength is not None else '—'}"),
+            ]),
+        ]))
+    summary_panel=html.Div(className="vol-summary-panel",children=[html.Div("VOLATILITY REGIME SUMMARY",className="vol-summary-title"),*summary_rows])
+    return html.Div(children=[dcc.Link("← BACK",href=localized_href(ROUTE),className="vol-analysis-back"),html.Div(className="vol-analysis-layout",children=[html.Div(className="vol-analysis-grid",children=cards),summary_panel])])
 
 @callback(
     Output(SELECTION_STORE_ID,"data"),

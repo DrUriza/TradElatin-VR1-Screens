@@ -4,7 +4,7 @@ from typing import Any
 from urllib.parse import quote
 
 import plotly.graph_objects as go
-from dash import dcc, html
+from dash import Input, Output, callback, dcc, html
 
 from screen_core.components import (
     reference_gallery,
@@ -12,7 +12,7 @@ from screen_core.components import (
     screen_page,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import localized_href
+from screen_core.i18n import locale_context, locale_from_search, localize_component_tree, localized_href
 from screen_core.figures import apply_analysis_figure_layout
 
 
@@ -21,6 +21,9 @@ LABEL = "Liquidations"
 CONTRACT_FILE = "long_short_liquidations_VR1_FINAL.json"
 HAS_ANALYSIS = True
 SCREEN_REVISION = "LIQUIDATIONS_NATIVE_B_LONG_SHORT_V1"
+SELECTION_STORE_ID = "liquidations-analysis-selection"
+SELECTION_INPUT_ID = "liquidations-analysis-options"
+ANALYSIS_CONTENT_ID = "liquidations-analysis-content"
 
 REFERENCE_IMAGES = [
     "Liquidation/07_Long_Short_Liquidation_A.png",
@@ -44,16 +47,38 @@ LOCAL_CSS = """
 .liq-top-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
+    gap: 6px;
     align-items: stretch;
 }
 
 .liq-bottom-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    margin-top: 8px;
+    gap: 6px;
+    margin-top: 6px;
 }
+
+.liq-main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 286px;
+    gap: 8px;
+    align-items: start;
+}
+
+.liq-native-grid { min-width: 0; }
+
+.liq-selector-panel {
+    border: 1px solid #173247;
+    border-radius: 5px;
+    background: #06111d;
+    padding: 8px;
+}
+
+.liq-selector-title { color: #d9e8f5; font-size: 9px; font-weight: 700; margin: 8px 0 6px; }
+.liq-selector-note { color: #7f96aa; font-size: 8px; line-height: 1.35; margin-bottom: 7px; }
+.liq-analysis-options label { display: block; color: #d9e8f5; font-size: 8px; margin: 6px 0; }
+.liq-analysis-options input { margin-right: 6px; accent-color: #2f80ff; }
+.liq-selector-link { display:flex;align-items:center;justify-content:center;border:1px solid #1677ff;color:#4da3ff;background:#071522;padding:7px 8px;font-size:9px;font-weight:700;text-decoration:none; }
 
 .liq-chart-card,
 .liq-summary-panel {
@@ -64,12 +89,12 @@ LOCAL_CSS = """
 }
 
 .liq-chart-header {
-    min-height: 34px;
+    min-height: 26px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 7px 10px 4px;
+    padding: 4px 8px;
     border-bottom: 1px solid rgba(23,50,71,.55);
 }
 
@@ -177,9 +202,19 @@ LOCAL_CSS = """
 .liq-analysis-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 8px;
-    padding: 8px 14px 18px;
+    gap: 6px;
+    padding: 6px 12px 12px;
 }
+
+.liq-analysis-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 286px;
+    gap: 8px;
+    align-items: start;
+    padding: 6px 12px 12px;
+}
+
+.liq-analysis-layout .liq-analysis-grid { padding: 0; }
 
 .liq-analysis-card {
     min-width: 0;
@@ -190,10 +225,10 @@ LOCAL_CSS = """
 }
 
 .liq-analysis-card-title {
-    min-height: 28px;
+    min-height: 26px;
     display: flex;
     align-items: center;
-    padding: 6px 8px;
+    padding: 5px 8px;
     border-bottom: 1px solid #173247;
     color: #d9e8f5;
     font-size: 9px;
@@ -208,6 +243,7 @@ LOCAL_CSS = """
 
 @media (max-width: 1100px) {
     .liq-analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .liq-analysis-layout, .liq-main-layout { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 700px) {
@@ -1382,10 +1418,37 @@ ANALYSIS_LABELS = {
     "cascade_acceleration": "LIQUIDATION CASCADE / ACCELERATION",
     "price_liquidation_regime": "PRICE × LIQUIDATION REGIME",
     "crowding_liquidation_pressure": "LONG/SHORT CROWDING × LIQUIDATION PRESSURE",
-    "liquidation_regime_hmi": "LIQUIDATION REGIME / HMI",
+    "liquidation_regime_hmi": "LIQUIDATION REGIME / HMI + WASSERSTEIN",
 }
 
 ANALYSIS_ORDER = tuple(ANALYSIS_LABELS)
+
+
+def _validated_analysis_selection(selection: Any) -> list[str]:
+    requested = set(selection if isinstance(selection, list) else [])
+    selected = [indicator_id for indicator_id in ANALYSIS_ORDER if indicator_id in requested]
+    return selected or list(ANALYSIS_ORDER)
+
+
+def _analysis_selector_panel() -> html.Div:
+    return html.Div(
+        className="liq-selector-panel",
+        children=[
+            dcc.Link(
+                "LIQUIDATIONS ANALYSIS ↗",
+                href=localized_href(f"{ROUTE}/analysis"),
+                className="liq-selector-link",
+            ),
+            html.Div("LIQUIDATIONS & POSITIONING · SCREEN B", className="liq-selector-title"),
+            html.Div("SELECT NATIVE ANALYSIS PANELS", className="liq-selector-note"),
+            dcc.Checklist(
+                id=SELECTION_INPUT_ID,
+                options=[{"label": label, "value": indicator_id} for indicator_id, label in ANALYSIS_LABELS.items()],
+                value=list(ANALYSIS_ORDER),
+                className="liq-analysis-options",
+            ),
+        ],
+    )
 
 
 def _analysis_block(contract: dict[str, Any], indicator_id: str) -> dict[str, Any]:
@@ -1465,9 +1528,12 @@ def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 
     return fig
 
 
-def _analysis_screen(contract: dict[str, Any]) -> html.Div:
+def _analysis_screen(contract: dict[str, Any], selection: Any = None) -> html.Div:
+    selected_ids = _validated_analysis_selection(selection)
     cards = []
     for indicator_id in ANALYSIS_ORDER:
+        if indicator_id not in selected_ids:
+            continue
         cards.append(html.Div(
             className="liq-analysis-card",
             children=[
@@ -1475,7 +1541,7 @@ def _analysis_screen(contract: dict[str, Any]) -> html.Div:
                 dcc.Graph(
                     figure=_analysis_figure(contract, indicator_id),
                     config={"displaylogo": False, "responsive": True, "scrollZoom": False},
-                    style={"height": "310px", "width": "100%"},
+                    style={"height": "215px", "minHeight": "215px", "width": "100%"},
                 ),
             ],
         ))
@@ -1490,9 +1556,41 @@ def _analysis_screen(contract: dict[str, Any]) -> html.Div:
                 "Native Screen B: realized liquidations, cascades, crowding and regime. Long/Short Ratio is positioning; it is not interpreted as a realized liquidation.",
                 className="liq-analysis-subtitle",
             ),
-            html.Div(cards, className="liq-analysis-grid"),
+            html.Div(
+                className="liq-analysis-layout",
+                children=[
+                    html.Div(cards, className="liq-analysis-grid"),
+                    _side_panel(contract),
+                ],
+            ),
         ],
     )
+
+
+@callback(
+    Output(SELECTION_STORE_ID, "data"),
+    Input(SELECTION_INPUT_ID, "value"),
+    prevent_initial_call=True,
+)
+def _save_analysis_selection(selection: Any) -> list[str]:
+    return _validated_analysis_selection(selection)
+
+
+@callback(
+    Output(ANALYSIS_CONTENT_ID, "children"),
+    Input(SELECTION_STORE_ID, "data"),
+    Input("url", "search"),
+    prevent_initial_call=False,
+)
+def _refresh_analysis(selection: Any, search: str | None) -> html.Div:
+    from screen_core.contract_loader import load_contract
+
+    locale = locale_from_search(search)
+    with locale_context(locale):
+        return localize_component_tree(
+            _analysis_screen(load_contract(CONTRACT_FILE), selection),
+            locale,
+        )
 
 
 def render(
@@ -1507,7 +1605,11 @@ def render(
     if view == "analysis":
         return screen_page(
             _stylesheet(),
-            _analysis_screen(contract),
+            dcc.Store(id=SELECTION_STORE_ID, storage_type="session"),
+            html.Div(
+                id=ANALYSIS_CONTENT_ID,
+                children=_analysis_screen(contract),
+            ),
         )
 
     if view == "reference":
@@ -1533,9 +1635,9 @@ def render(
                 graph_id=(
                     "aggregate-liquidation-map"
                 ),
-                height=365,
+                height=225,
             ),
-            _positioning_card(contract, height=365),
+            _positioning_card(contract, height=225),
         ],
     )
 
@@ -1547,7 +1649,7 @@ def render(
                 charts.get("hyperliquid_map"),
                 map_kind="hyperliquid",
                 graph_id="hyperliquid-map",
-                height=365,
+                height=225,
             ),
             _map_card(
                 contract,
@@ -1556,15 +1658,21 @@ def render(
                 ),
                 map_kind="binance",
                 graph_id="binance-leverage-map",
-                height=365,
+                height=225,
             ),
         ],
     )
 
     return screen_page(
         _stylesheet(),
+        dcc.Store(id=SELECTION_STORE_ID, storage_type="session"),
         screen_header(contract),
-        top,
-        _side_panel(contract),
-        lower,
+        html.Div(
+            className="liq-main-layout",
+            children=[
+                html.Div(className="liq-native-grid", children=[top, lower]),
+                _analysis_selector_panel(),
+            ],
+        ),
+        html.Div(id=ANALYSIS_CONTENT_ID, style={"display": "none"}),
     )

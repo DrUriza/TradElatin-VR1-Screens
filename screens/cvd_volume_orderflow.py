@@ -110,23 +110,23 @@ CVD_LOCAL_CSS = """
 .cvd-main-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 286px;
-    gap: 8px;
+    gap: 6px;
     align-items: stretch;
 }
 
 .cvd-market-stack-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    height: 590px;
+    gap: 6px;
+    height: 510px;
 }
 
 .cvd-market-stack {
     display: grid;
     min-width: 0;
-    grid-template-rows: 350px 232px;
-    gap: 8px;
-    height: 590px;
+    grid-template-rows: 252px 252px;
+    gap: 6px;
+    height: 510px;
 }
 
 .cvd-chart-card,
@@ -138,7 +138,7 @@ CVD_LOCAL_CSS = """
 }
 
 .cvd-indicator-panel {
-    height: 590px;
+    height: 510px;
     padding: 8px 10px 12px;
     color: #dbe7ef;
     overflow-y: auto;
@@ -259,7 +259,7 @@ CVD_LOCAL_CSS = """
     box-sizing: border-box;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1179px) {
     .cvd-market-stack-grid {
         grid-template-columns: 1fr;
     }
@@ -1037,7 +1037,7 @@ def _cvd_candlestick_figure(
 
     fig.update_layout(
         title=None,
-        height=350,
+        height=225,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={
@@ -1334,14 +1334,14 @@ def _indicator_figure(
     # Native CVD Screen-B panels are direct Processing outputs; no legacy oscillator arrows.
 
     fig.update_layout(
-        height=310,
+        height=215,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={
             "l": 32,
             "r": 8,
-            "t": 6,
-            "b": 20,
+            "t": 5,
+            "b": 18,
         },
         font={
             "family": "Inter, Segoe UI, sans-serif",
@@ -1615,8 +1615,8 @@ def build_analysis_screen(
                                 "responsive": True,
                             },
                             style={
-                                "height": "310px",
-                                "minHeight": "310px",
+                                "height": "215px",
+                                "minHeight": "215px",
                                 "width": "100%",
                             },
                         ),
@@ -1763,8 +1763,8 @@ def _main_candle_grid(
                                     ],
                                 },
                                 style={
-                                    "height": "350px",
-                                    "minHeight": "350px",
+                                    "height": "225px",
+                                    "minHeight": "225px",
                                     "width": "100%",
                                 },
                             )
@@ -1799,8 +1799,8 @@ def _main_candle_grid(
                                     "responsive": True,
                                 },
                                 style={
-                                    "height": "232px",
-                                    "minHeight": "232px",
+                                    "height": "225px",
+                                    "minHeight": "225px",
                                     "width": "100%",
                                 },
                             )

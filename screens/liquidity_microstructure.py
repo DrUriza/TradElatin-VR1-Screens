@@ -766,10 +766,10 @@ def _native_line_figure(
     if reference_line is not None:
         fig.add_hline(y=reference_line, line_width=1, line_dash="dot", line_color="rgba(200,214,226,.50)")
     fig.update_layout(
-        height=310,
+        height=215,
         paper_bgcolor=_BG,
         plot_bgcolor=_BG,
-        margin={"l": 42, "r": 14, "t": 18, "b": 30},
+        margin={"l": 42, "r": 14, "t": 14, "b": 26},
         font={"family": "Arial, sans-serif", "size": 8, "color": _MUTED},
         hovermode="x unified",
         legend={
@@ -813,10 +813,10 @@ def _analysis_card(title: str, subtitle: str, figure: go.Figure, help_key: str |
             dcc.Graph(
                 figure=figure,
                 config={"displayModeBar": False, "responsive": True},
-                style={"height": "310px"},
+                style={"height": "215px", "minHeight": "215px"},
             ),
         ],
-        style={**_CARD_STYLE, "minHeight": "365px"},
+        style={**_CARD_STYLE, "minHeight": "250px"},
     )
 
 
