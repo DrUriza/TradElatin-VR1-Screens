@@ -140,14 +140,14 @@ LOCAL_CSS = """
 .etf-content-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: 252px 252px;
-    gap: 6px;
-    height: 510px;
+    grid-template-rows: 291px 291px;
+    gap: 8px;
+    height: 590px;
 }
 
 .etf-content-grid > * {
-    height: 252px;
-    min-height: 252px;
+    height: 291px;
+    min-height: 291px;
     overflow: hidden;
     box-sizing: border-box;
 }
@@ -163,7 +163,7 @@ LOCAL_CSS = """
     box-sizing: border-box;
 }
 .etf-selector {
-    height: 510px;
+    height: 590px;
     padding: 8px 10px 12px;
     overflow-y: auto;
     box-sizing: border-box;
@@ -245,7 +245,7 @@ LOCAL_CSS = """
     letter-spacing: .1px;
     box-sizing: border-box;
 }
-@media (max-width: 1179px) {
+@media (max-width: 1200px) {
     .etf-analysis-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -709,7 +709,7 @@ def _exchange_balance_figure(
             "x": .01,
             "font": {"size": 10, "color": TEXT},
         },
-        height=225,
+        height=291,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={"l": 42, "r": 10, "t": 34, "b": 24},
@@ -796,10 +796,10 @@ def _indicator_figure(
                 )
 
     fig.update_layout(
-        height=215,
+        height=310,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
-        margin={"l": 34, "r": 8, "t": 5, "b": 24},
+        margin={"l": 34, "r": 8, "t": 5, "b": 29},
         font={"size": 7, "color": MUTED},
         showlegend=True,
         legend={
@@ -1038,8 +1038,8 @@ def _analysis_screen(
                             "responsive": True,
                         },
                         style={
-                            "height": "215px",
-                            "minHeight": "215px",
+                            "height": "310px",
+                            "minHeight": "310px",
                             "width": "100%",
                         },
                     ),
@@ -1243,7 +1243,7 @@ def render(
                 chart_id="etf-flow-daily",
                 title="ETF Daily Net Flow",
                 range_id=range_id,
-                height=225,
+                height=291,
                 help_family="etf",
                 help_section="screen_a",
                 help_key="etf_flow_daily",
@@ -1269,7 +1269,7 @@ def render(
                 ),
                 title="Exchange Net Flow",
                 range_id=range_id,
-                height=225,
+                height=291,
                 help_family="etf",
                 help_section="screen_a",
                 help_key="exchange_net_flow",
@@ -1304,8 +1304,8 @@ def render(
                             "scrollZoom": True,
                         },
                         style={
-                            "height": "225px",
-                            "minHeight": "225px",
+                            "height": "291px",
+                            "minHeight": "291px",
                             "width": "100%",
                         },
                     )

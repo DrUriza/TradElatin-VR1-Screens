@@ -13,16 +13,12 @@ Bitcoin market-intelligence HMI for eight analysis families:
 
 ## Run
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-python app.py
-```
+Create/activate the virtual environment and start the single canonical entry point:
 
-On macOS or Linux, activate the environment with
-`source .venv/bin/activate` before installing the requirements and running
-`python app.py`.
+```powershell
+.\.venv\Scripts\Activate.ps1
+python main.py
+```
 
 Then open:
 
@@ -55,3 +51,20 @@ See:
 - `docs/DEBUGGING.md`
 - `docs/CONTRACT_RULES.md`
 - `docs/VALIDATION.md`
+
+## Contract filenames
+
+Screens keeps canonical golden fixtures such as `prices_VR1_FINAL.json`, but runtime Processing outputs may use concise family names. Supported preferred runtime names are:
+
+```text
+prices.json
+cvd.json
+open_interest.json
+etf.json
+miners.json
+volatility.json
+liquidations.json
+liquidity.json
+```
+
+If both a concise runtime name and its canonical golden fixture exist, the concise runtime file is selected. The resolved filename is visible in the contract revision string for debugging.

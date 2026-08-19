@@ -410,12 +410,12 @@ OPEN_INTEREST_LOCAL_CSS = """
 .oi-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 215px;
+    min-height: 310px;
 }
 
 .oi-analysis-card-graph {
     min-width: 0;
-    height: 215px;
+    height: 310px;
 }
 
 .oi-analysis-card-values {
@@ -1578,8 +1578,24 @@ def _add_screen_a_cross_markers(
     market: str,
     timeframe: str,
 ) -> None:
-    """Draw CVD-style arrows whose tips use exact contractual coordinates."""
-    del records
+    """Draw exact contractual arrows only inside the visible OI data window.
+
+    Processing remains responsible for producing coherent events. This HMI
+    guard prevents stale/out-of-window events from being drawn over periods for
+    which the currently displayed OI OHLC series has no observations.
+    """
+    visible_timestamps = [
+        _timestamp_key(record.get("timestamp"))
+        for record in records
+        if isinstance(record, dict)
+    ]
+    visible_timestamps = [value for value in visible_timestamps if value is not None]
+    if not visible_timestamps:
+        return
+
+    first_visible = min(visible_timestamps)
+    last_visible = max(visible_timestamps)
+
     for event in _screen_a_cross_events(contract, market, timeframe, selected):
         signal = str(event.get("signal") or "").lower()
         timestamp_exact = event.get("event_timestamp_exact")
@@ -1587,7 +1603,10 @@ def _add_screen_a_cross_markers(
         display = _safe_dict(event.get("display"))
         anchor_price = display.get("anchor_price")
 
-        if signal not in {"bullish", "bearish"} or timestamp_exact is None:
+        event_timestamp = _timestamp_key(timestamp_exact)
+        if signal not in {"bullish", "bearish"} or event_timestamp is None:
+            continue
+        if not (first_visible <= event_timestamp <= last_visible):
             continue
         if not isinstance(value_exact, (int, float)):
             continue
@@ -2670,10 +2689,10 @@ def _analysis_figure(
     ]
 
     fig.update_layout(
-        height=215,
+        height=310,
         paper_bgcolor="#04111c",
         plot_bgcolor="#04111c",
-        margin={"l": 30, "r": 5, "t": 5, "b": 16},
+        margin={"l": 30, "r": 5, "t": 6, "b": 18},
         font={"family": "Arial, sans-serif", "size": 7, "color": "#8fa0ab"},
         hovermode="x unified",
         bargap=.08,

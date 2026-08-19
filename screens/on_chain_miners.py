@@ -133,9 +133,9 @@ LOCAL_CSS = """
 .onchain-top-widgets .widget-grid { grid-template-columns: repeat(4,minmax(120px,1fr)); gap:3px; }
 .onchain-top-widgets .widget-card { min-height:36px; padding:2px 7px; }
 .onchain-main-grid { display:grid; grid-template-columns:minmax(0,1fr) 306px; gap:8px; align-items:stretch; }
-.onchain-series-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:252px 252px; gap:6px; height:510px; }
+.onchain-series-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:291px 291px; gap:8px; height:590px; }
 .onchain-card { min-width:0; border:1px solid #173247; background:#06111d; overflow:hidden; }
-.onchain-selector { border:1px solid #173247; background:#06111d; padding:8px; height:510px; overflow:auto; }
+.onchain-selector { border:1px solid #173247; background:#06111d; padding:10px; height:590px; overflow:auto; }
 .onchain-button { border:1px solid #1677ff; color:#4da3ff; background:#071522; font-size:11px; font-weight:700; min-height:34px; }
 .onchain-heading { color:#d9e8f5; font-size:11px; font-weight:700; margin:4px 0; }
 .onchain-note { color:#7f96aa; font-size:8px; line-height:1.35; margin-bottom:10px; }
@@ -147,9 +147,9 @@ LOCAL_CSS = """
 .analysis-back-row { padding:8px 14px 0; }
 .analysis-back-button { display:inline-flex; border:1px solid #1677ff; color:#4da3ff; background:#071522; padding:7px 12px; font-size:9px; text-decoration:none; }
 .onchain-analysis-layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:8px; padding:8px 14px 18px; }
-.onchain-analysis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; }
+.onchain-analysis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
 .onchain-analysis-card { border:1px solid #173247; background:#071522; min-width:0; overflow:hidden; }
-.onchain-analysis-card-title { color:#d9e8f5; font-size:8px; font-weight:700; min-height:26px; padding:5px 8px; border-bottom:1px solid #173247; }
+.onchain-analysis-card-title { color:#d9e8f5; font-size:8px; font-weight:700; padding:7px 8px; border-bottom:1px solid #173247; }
 .onchain-summary-column { border:1px solid #173247; background:#071522; padding:10px; align-self:start; }
 .onchain-summary-title { color:#4da3ff; font-size:10px; font-weight:700; margin-bottom:9px; }
 .onchain-summary-row { padding:8px 0; border-top:1px solid rgba(23,50,71,.7); }
@@ -252,7 +252,7 @@ def _metric_figure(contract: dict[str, Any], chart_id: str, range_id: str | None
 
     fig.update_layout(
         title=None,
-        height=225,
+        height=291,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={"l": 44, "r": 10, "t": 20, "b": 34},
@@ -402,7 +402,7 @@ def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: 
     for iid in selected:
         cards.append(html.Div(className="onchain-analysis-card", children=[
             html.Div(contextual_help_label(ANALYSIS_LABELS[iid], family="miners", section="screen_b", key=iid), className="onchain-analysis-card-title"),
-            dcc.Graph(figure=_native_indicator_figure(contract, iid, range_id), config={"displaylogo": False, "responsive": True}, style={"height": "215px", "minHeight": "215px", "width": "100%"}),
+            dcc.Graph(figure=_native_indicator_figure(contract, iid, range_id), config={"displaylogo": False, "responsive": True}, style={"height": "310px", "minHeight": "310px", "width": "100%"}),
         ]))
     body = html.Div(cards, className="onchain-analysis-grid") if cards else html.Div("No metrics selected for Screen B.", className="contract-warning")
     return html.Div(className="onchain-analysis-shell", children=[
@@ -489,7 +489,7 @@ def render(contract: dict[str, Any], view: str, market: str | None, timeframe: s
                     ),
                     className="context-help-card-title context-help-card-title-compact",
                 ),
-                dcc.Graph(id=graph_ids[cid], figure=_metric_figure(contract, cid, range_id), config={"displaylogo": False, "responsive": True, "scrollZoom": True}, style={"height": "225px", "minHeight": "225px", "width": "100%"})
+                dcc.Graph(id=graph_ids[cid], figure=_metric_figure(contract, cid, range_id), config={"displaylogo": False, "responsive": True, "scrollZoom": True}, style={"height": "266px", "minHeight": "266px", "width": "100%"})
             ])
             for cid in TARGETS
         ]),

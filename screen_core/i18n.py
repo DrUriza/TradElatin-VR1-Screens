@@ -61,13 +61,6 @@ _PAIRS: tuple[tuple[str, str], ...] = (
     ("INDICATOR", "INDICADOR"),
     ("VALUE", "VALOR"),
     ("STRENGTH", "FUERZA"),
-    ("VOLATILITY REGIME SUMMARY", "RESUMEN DEL RÉGIMEN DE VOLATILIDAD"),
-    ("LIQUIDATIONS & POSITIONING · SCREEN B", "LIQUIDACIONES Y POSICIONAMIENTO · PANTALLA B"),
-    ("LIQUIDATIONS ANALYSIS ↗", "ANÁLISIS DE LIQUIDACIONES ↗"),
-    ("SELECT NATIVE ANALYSIS PANELS", "SELECCIONAR PANELES DE ANÁLISIS NATIVOS"),
-    ("VOLATILITY REGIME SUMMARY", "RESUMEN DEL RÉGIMEN DE VOLATILIDAD"),
-    ("LIQUIDATIONS & POSITIONING · SCREEN B", "LIQUIDACIONES Y POSICIONAMIENTO · PANTALLA B"),
-    ("LIQUIDATIONS ANALYSIS ↗", "ANÁLISIS DE LIQUIDACIONES ↗"),
     ("STRENGTH LEGEND", "LEYENDA DE FUERZA"),
     ("VERY STRONG", "MUY FUERTE"),
     ("STRONG", "FUERTE"),
@@ -504,6 +497,11 @@ _PAIRS: tuple[tuple[str, str], ...] = (
     ("UNKNOWN", "DESCONOCIDO"),
     ("CALM", "CALMO"),
     ("HIGH", "ALTO"),
+    ("VOLATILITY REGIME SUMMARY", "RESUMEN DEL RÉGIMEN DE VOLATILIDAD"),
+    ("LIQUIDATIONS ANALYSIS ↗", "ANÁLISIS DE LIQUIDACIONES ↗"),
+    ("LIQUIDATIONS & POSITIONING · SCREEN B", "LIQUIDACIONES Y POSICIONAMIENTO · PANTALLA B"),
+    ("Select native analysis panels.", "Selecciona paneles de análisis nativos."),
+    ("Native Screen B: realized liquidations, cascades, crowding and regime. Long/Short Ratio is positioning; it is not interpreted as a realized liquidation.", "Pantalla B nativa: liquidaciones realizadas, cascadas, crowding y régimen. Long/Short Ratio es posicionamiento; no se interpreta como liquidación realizada."),
 )
 
 EN_TO_ES = {en: es for en, es in _PAIRS}

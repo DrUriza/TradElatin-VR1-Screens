@@ -12,7 +12,7 @@ from screen_core.components import (
     screen_page,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import locale_context, locale_from_search, localize_component_tree, localized_href
+from screen_core.i18n import locale_context, localize_component_tree, localized_href, locale_from_search
 from screen_core.figures import apply_analysis_figure_layout
 
 
@@ -22,8 +22,8 @@ CONTRACT_FILE = "long_short_liquidations_VR1_FINAL.json"
 HAS_ANALYSIS = True
 SCREEN_REVISION = "LIQUIDATIONS_NATIVE_B_LONG_SHORT_V1"
 SELECTION_STORE_ID = "liquidations-analysis-selection"
-SELECTION_INPUT_ID = "liquidations-analysis-options"
 ANALYSIS_CONTENT_ID = "liquidations-analysis-content"
+
 
 REFERENCE_IMAGES = [
     "Liquidation/07_Long_Short_Liquidation_A.png",
@@ -47,38 +47,16 @@ LOCAL_CSS = """
 .liq-top-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
+    gap: 8px;
     align-items: stretch;
 }
 
 .liq-bottom-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 6px;
-    margin-top: 6px;
-}
-
-.liq-main-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 286px;
     gap: 8px;
-    align-items: start;
+    margin-top: 8px;
 }
-
-.liq-native-grid { min-width: 0; }
-
-.liq-selector-panel {
-    border: 1px solid #173247;
-    border-radius: 5px;
-    background: #06111d;
-    padding: 8px;
-}
-
-.liq-selector-title { color: #d9e8f5; font-size: 9px; font-weight: 700; margin: 8px 0 6px; }
-.liq-selector-note { color: #7f96aa; font-size: 8px; line-height: 1.35; margin-bottom: 7px; }
-.liq-analysis-options label { display: block; color: #d9e8f5; font-size: 8px; margin: 6px 0; }
-.liq-analysis-options input { margin-right: 6px; accent-color: #2f80ff; }
-.liq-selector-link { display:flex;align-items:center;justify-content:center;border:1px solid #1677ff;color:#4da3ff;background:#071522;padding:7px 8px;font-size:9px;font-weight:700;text-decoration:none; }
 
 .liq-chart-card,
 .liq-summary-panel {
@@ -89,12 +67,12 @@ LOCAL_CSS = """
 }
 
 .liq-chart-header {
-    min-height: 26px;
+    min-height: 34px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 4px 8px;
+    padding: 7px 10px 4px;
     border-bottom: 1px solid rgba(23,50,71,.55);
 }
 
@@ -190,20 +168,69 @@ LOCAL_CSS = """
     text-decoration: none;
 }
 
+.liq-screen-a-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 286px;
+    gap: 8px;
+    align-items: start;
+}
+
+.liq-screen-a-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
+
+.liq-selector-panel {
+    min-width: 0;
+    border: 1px solid #173247;
+    border-radius: 5px;
+    background: #06111d;
+    padding: 10px;
+}
+
+.liq-selector-link {
+    display: block;
+    text-align: center;
+    border: 1px solid #2f80ff;
+    color: #62afff;
+    text-decoration: none;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 8px;
+    margin-bottom: 10px;
+}
+
+.liq-selector-title {
+    color: #d9e8f5;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+}
+
+.liq-selector-note {
+    color: #7f96aa;
+    font-size: 8px;
+    line-height: 1.4;
+    margin-bottom: 8px;
+}
+
+.liq-selector-check label {
+    display: block;
+    color: #d9e8f5;
+    font-size: 8px;
+    margin: 0 0 8px;
+    line-height: 1.3;
+}
+
 .liq-analysis-shell {
-    min-height: 100vh;
     background: #06111d;
 }
 
 .liq-analysis-back-row {
-    padding: 8px 14px 0;
-}
-
-.liq-analysis-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 6px;
-    padding: 6px 12px 12px;
+    padding: 0 0 8px;
 }
 
 .liq-analysis-layout {
@@ -211,10 +238,15 @@ LOCAL_CSS = """
     grid-template-columns: minmax(0, 1fr) 286px;
     gap: 8px;
     align-items: start;
-    padding: 6px 12px 12px;
+    min-width: 0;
 }
 
-.liq-analysis-layout .liq-analysis-grid { padding: 0; }
+.liq-analysis-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    min-width: 0;
+}
 
 .liq-analysis-card {
     min-width: 0;
@@ -225,10 +257,10 @@ LOCAL_CSS = """
 }
 
 .liq-analysis-card-title {
-    min-height: 26px;
+    min-height: 28px;
     display: flex;
     align-items: center;
-    padding: 5px 8px;
+    padding: 6px 8px;
     border-bottom: 1px solid #173247;
     color: #d9e8f5;
     font-size: 9px;
@@ -242,19 +274,19 @@ LOCAL_CSS = """
 }
 
 @media (max-width: 1100px) {
+    .liq-analysis-layout,
+    .liq-screen-a-layout { grid-template-columns: 1fr; }
     .liq-analysis-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .liq-analysis-layout, .liq-main-layout { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 900px) {
+    .liq-screen-a-grid,
+    .liq-top-grid,
+    .liq-bottom-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 700px) {
     .liq-analysis-grid { grid-template-columns: 1fr; }
-}
-
-@media (max-width: 900px) {
-    .liq-top-grid,
-    .liq-bottom-grid {
-        grid-template-columns: 1fr;
-    }
 }
 """
 
@@ -1424,39 +1456,12 @@ ANALYSIS_LABELS = {
 ANALYSIS_ORDER = tuple(ANALYSIS_LABELS)
 
 
-def _validated_analysis_selection(selection: Any) -> list[str]:
-    requested = set(selection if isinstance(selection, list) else [])
-    selected = [indicator_id for indicator_id in ANALYSIS_ORDER if indicator_id in requested]
-    return selected or list(ANALYSIS_ORDER)
-
-
-def _analysis_selector_panel() -> html.Div:
-    return html.Div(
-        className="liq-selector-panel",
-        children=[
-            dcc.Link(
-                "LIQUIDATIONS ANALYSIS ↗",
-                href=localized_href(f"{ROUTE}/analysis"),
-                className="liq-selector-link",
-            ),
-            html.Div("LIQUIDATIONS & POSITIONING · SCREEN B", className="liq-selector-title"),
-            html.Div("SELECT NATIVE ANALYSIS PANELS", className="liq-selector-note"),
-            dcc.Checklist(
-                id=SELECTION_INPUT_ID,
-                options=[{"label": label, "value": indicator_id} for indicator_id, label in ANALYSIS_LABELS.items()],
-                value=list(ANALYSIS_ORDER),
-                className="liq-analysis-options",
-            ),
-        ],
-    )
-
-
 def _analysis_block(contract: dict[str, Any], indicator_id: str) -> dict[str, Any]:
     root = _safe_dict(contract.get("liquidation_analysis"))
     return _safe_dict(_safe_dict(root.get("indicators")).get(indicator_id))
 
 
-def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 310) -> go.Figure:
+def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 220) -> go.Figure:
     block = _analysis_block(contract, indicator_id)
     points = [
         item for item in _safe_list(block.get("points"))
@@ -1522,29 +1527,63 @@ def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 
     for trace, spec_raw in zip(fig.data, _safe_list(block.get("series"))):
         if str(_safe_dict(spec_raw).get("field")) in secondary.get(indicator_id, set()):
             trace.visible = "legendonly"
-    apply_analysis_figure_layout(fig)
+    apply_analysis_figure_layout(fig, height=height)
     fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 7, "color": MUTED})
     fig.update_yaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 7, "color": MUTED})
     return fig
 
 
-def _analysis_screen(contract: dict[str, Any], selection: Any = None) -> html.Div:
-    selected_ids = _validated_analysis_selection(selection)
-    cards = []
-    for indicator_id in ANALYSIS_ORDER:
-        if indicator_id not in selected_ids:
-            continue
-        cards.append(html.Div(
-            className="liq-analysis-card",
-            children=[
-                html.Div(contextual_help_label(ANALYSIS_LABELS[indicator_id], family="liquidations", section="screen_b", key=indicator_id), className="liq-analysis-card-title"),
-                dcc.Graph(
-                    figure=_analysis_figure(contract, indicator_id),
-                    config={"displaylogo": False, "responsive": True, "scrollZoom": False},
-                    style={"height": "215px", "minHeight": "215px", "width": "100%"},
-                ),
-            ],
-        ))
+def _validated_selection(selection: Any) -> list[str]:
+    raw = selection if isinstance(selection, list) else []
+    selected = [iid for iid in ANALYSIS_ORDER if iid in raw]
+    return selected or list(ANALYSIS_ORDER)
+
+
+def _analysis_selector_panel() -> html.Div:
+    options = [{"label": ANALYSIS_LABELS[iid], "value": iid} for iid in ANALYSIS_ORDER]
+    return html.Div(
+        className="liq-selector-panel",
+        children=[
+            dcc.Link("LIQUIDATIONS ANALYSIS ↗", href=localized_href(f"{ROUTE}/analysis"), className="liq-selector-link"),
+            html.Div("LIQUIDATIONS & POSITIONING · SCREEN B", className="liq-selector-title"),
+            html.Div("Select native analysis panels.", className="liq-selector-note"),
+            dcc.Checklist(
+                id="liquidations-analysis-selector",
+                options=options,
+                value=list(ANALYSIS_ORDER),
+                className="liq-selector-check",
+                persistence="liquidations-analysis-selection-v1",
+                persistence_type="session",
+            ),
+        ],
+    )
+
+
+def _analysis_screen(contract: dict[str, Any], selection: Any) -> html.Div:
+    selected = _validated_selection(selection)
+    cards: list[Any] = []
+    for indicator_id in selected:
+        cards.append(
+            html.Div(
+                className="liq-analysis-card",
+                children=[
+                    html.Div(
+                        contextual_help_label(
+                            ANALYSIS_LABELS[indicator_id],
+                            family="liquidations",
+                            section="screen_b",
+                            key=indicator_id,
+                        ),
+                        className="liq-analysis-card-title",
+                    ),
+                    dcc.Graph(
+                        figure=_analysis_figure(contract, indicator_id, height=220),
+                        config={"displaylogo": False, "responsive": True, "scrollZoom": False},
+                        style={"height": "220px", "minHeight": "220px", "width": "100%"},
+                    ),
+                ],
+            )
+        )
 
     return html.Div(
         className="liq-analysis-shell",
@@ -1569,28 +1608,27 @@ def _analysis_screen(contract: dict[str, Any], selection: Any = None) -> html.Di
 
 @callback(
     Output(SELECTION_STORE_ID, "data"),
-    Input(SELECTION_INPUT_ID, "value"),
+    Input("liquidations-analysis-selector", "value", allow_optional=True),
     prevent_initial_call=True,
 )
-def _save_analysis_selection(selection: Any) -> list[str]:
-    return _validated_analysis_selection(selection)
+def persist_analysis_selection(selection: list[str] | None) -> list[str]:
+    return _validated_selection(selection)
 
 
 @callback(
     Output(ANALYSIS_CONTENT_ID, "children"),
     Input(SELECTION_STORE_ID, "data"),
+    Input("reload-json", "n_clicks"),
     Input("url", "search"),
     prevent_initial_call=False,
 )
-def _refresh_analysis(selection: Any, search: str | None) -> html.Div:
+def update_analysis_content(selection: Any, _reload: int | None, search: str | None) -> html.Div:
     from screen_core.contract_loader import load_contract
 
     locale = locale_from_search(search)
     with locale_context(locale):
-        return localize_component_tree(
-            _analysis_screen(load_contract(CONTRACT_FILE), selection),
-            locale,
-        )
+        rendered = _analysis_screen(load_contract(CONTRACT_FILE), selection)
+        return localize_component_tree(rendered, locale)
 
 
 def render(
@@ -1605,74 +1643,51 @@ def render(
     if view == "analysis":
         return screen_page(
             _stylesheet(),
-            dcc.Store(id=SELECTION_STORE_ID, storage_type="session"),
-            html.Div(
-                id=ANALYSIS_CONTENT_ID,
-                children=_analysis_screen(contract),
-            ),
+            dcc.Store(id=SELECTION_STORE_ID, storage_type="session", data=list(ANALYSIS_ORDER)),
+            html.Div(id=ANALYSIS_CONTENT_ID, children=_analysis_screen(contract, list(ANALYSIS_ORDER))),
         )
 
     if view == "reference":
         return screen_page(
             _stylesheet(),
             screen_header(contract),
-            reference_gallery(
-                REFERENCE_IMAGES
-            ),
+            reference_gallery(REFERENCE_IMAGES),
         )
 
-    charts = _safe_dict(
-        contract.get("charts")
-    )
-
-    top = html.Div(
-        className="liq-top-grid",
+    charts = _safe_dict(contract.get("charts"))
+    map_grid = html.Div(
+        className="liq-screen-a-grid",
         children=[
             _map_card(
                 contract,
                 charts.get("aggregate_map"),
                 map_kind="aggregate",
-                graph_id=(
-                    "aggregate-liquidation-map"
-                ),
-                height=225,
+                graph_id="aggregate-liquidation-map",
+                height=270,
             ),
-            _positioning_card(contract, height=225),
-        ],
-    )
-
-    lower = html.Div(
-        className="liq-bottom-grid",
-        children=[
+            _positioning_card(contract, height=270),
             _map_card(
                 contract,
                 charts.get("hyperliquid_map"),
                 map_kind="hyperliquid",
                 graph_id="hyperliquid-map",
-                height=225,
+                height=270,
             ),
             _map_card(
                 contract,
-                charts.get(
-                    "binance_leverage_map"
-                ),
+                charts.get("binance_leverage_map"),
                 map_kind="binance",
                 graph_id="binance-leverage-map",
-                height=225,
+                height=270,
             ),
         ],
     )
 
     return screen_page(
         _stylesheet(),
-        dcc.Store(id=SELECTION_STORE_ID, storage_type="session"),
+        dcc.Store(id=SELECTION_STORE_ID, storage_type="session", data=list(ANALYSIS_ORDER)),
         screen_header(contract),
-        html.Div(
-            className="liq-main-layout",
-            children=[
-                html.Div(className="liq-native-grid", children=[top, lower]),
-                _analysis_selector_panel(),
-            ],
-        ),
+        html.Div(className="liq-screen-a-layout", children=[map_grid, _analysis_selector_panel()]),
         html.Div(id=ANALYSIS_CONTENT_ID, style={"display": "none"}),
     )
+

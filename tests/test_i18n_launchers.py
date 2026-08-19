@@ -5,6 +5,14 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_single_python_entrypoint_exists():
+    assert (ROOT / "main.py").exists()
+    assert not (ROOT / "run.ps1").exists()
+    assert not (ROOT / "run.sh").exists()
+    assert not (ROOT / "run_en.ps1").exists()
+    assert not (ROOT / "run_es.ps1").exists()
+
+
 def test_legacy_i18n_asset_is_noop_and_ignored():
     source = (ROOT / "assets" / "i18n_runtime.js").read_text(encoding="utf-8")
     assert "MutationObserver(" not in source

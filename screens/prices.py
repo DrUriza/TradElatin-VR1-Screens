@@ -18,7 +18,7 @@ from screen_core.components import (
     two_column,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
+from screen_core.i18n import current_locale, locale_context, locale_label, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
@@ -422,12 +422,12 @@ PRICES_LOCAL_CSS = """
 .prices-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 215px;
+    min-height: 310px;
 }
 
 .prices-analysis-card-graph {
     min-width: 0;
-    height: 215px;
+    height: 310px;
 }
 
 .prices-analysis-card-values {
@@ -1590,7 +1590,15 @@ def _add_contract_horizontal_levels(
     color: str,
     unavailable: list[str],
     label_transform: Any = None,
+    label_x: float = 0.985,
+    label_anchor: str = "right",
 ) -> None:
+    """Render contract-provided horizontal levels without deriving them in HMI.
+
+    Labels are explicit Plotly annotations anchored inside the price subplot
+    domain. This avoids Plotly ``add_hline(annotation_text=...)`` placing labels
+    over the y-axis or collapsing multiple level families into the same margin.
+    """
     status = str(block.get("status") or "").lower()
     if not block or status in {"unavailable", "insufficient_data", "error", "missing"}:
         unavailable.append(display_name)
@@ -1610,10 +1618,25 @@ def _add_contract_horizontal_levels(
             line_color=color,
             line_dash="dot",
             line_width=1.15 if str(raw_label) in {"0.5", "0.618"} else 0.8,
-            annotation_text=f"{display_name} {label}",
-            annotation_position="right",
-            annotation_font={"size": 7, "color": color},
             opacity=0.78,
+        )
+        fig.add_annotation(
+            x=label_x,
+            y=value,
+            xref="x domain",
+            yref="y",
+            row=1,
+            col=1,
+            text=f"{display_name} {label}",
+            showarrow=False,
+            xanchor=label_anchor,
+            yanchor="middle",
+            font={"size": 7, "color": color},
+            bgcolor="rgba(6,17,29,0.82)",
+            bordercolor=color,
+            borderwidth=0.5,
+            borderpad=1.5,
+            opacity=0.94,
         )
 
 
@@ -1703,24 +1726,30 @@ def _add_price_overlays(
             color="#8a7dff",
             unavailable=unavailable,
             label_transform=_fibonacci_label,
+            label_x=0.84,
+            label_anchor="right",
         )
 
     if "support" in selected:
         _add_contract_horizontal_levels(
             fig,
             _safe_dict(overlays.get("support")),
-            display_name="SOPORTE",
+            display_name=locale_label("SUPPORT", "SOPORTE"),
             color="#00c78c",
             unavailable=unavailable,
+            label_x=0.012,
+            label_anchor="left",
         )
 
     if "resistance" in selected:
         _add_contract_horizontal_levels(
             fig,
             _safe_dict(overlays.get("resistance")),
-            display_name="RESISTENCIA",
+            display_name=locale_label("RESISTANCE", "RESISTENCIA"),
             color="#ff4d6d",
             unavailable=unavailable,
+            label_x=0.985,
+            label_anchor="right",
         )
 
     if "regression_channel" in selected:
@@ -2820,10 +2849,10 @@ def _analysis_figure(
     ]
 
     fig.update_layout(
-        height=215,
+        height=310,
         paper_bgcolor="#04111c",
         plot_bgcolor="#04111c",
-        margin={"l": 30, "r": 5, "t": 5, "b": 16},
+        margin={"l": 30, "r": 5, "t": 6, "b": 18},
         font={"family": "Arial, sans-serif", "size": 7, "color": "#8fa0ab"},
         hovermode="x unified",
         bargap=.08,

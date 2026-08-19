@@ -212,7 +212,7 @@ def analysis_grid(
     for chart_id in chart_ids:
         chart = charts.get(chart_id)
         if isinstance(chart, dict):
-            cards.append(graph_card(chart, chart_id=f"analysis-{chart_id}", title=chart.get("title") or humanize_key(chart_id), market=market, timeframe=timeframe, range_id=range_id, height=215, class_name="analysis-chart-card", help_family=help_family, help_section="screen_b", help_key=chart_id, show_card_title=True))
+            cards.append(graph_card(chart, chart_id=f"analysis-{chart_id}", title=chart.get("title") or humanize_key(chart_id), market=market, timeframe=timeframe, range_id=range_id, height=310, class_name="analysis-chart-card", help_family=help_family, help_section="screen_b", help_key=chart_id, show_card_title=True))
         else:
             cards.append(unavailable_analysis_card(chart_id))
     while len(cards) < minimum_slots:
