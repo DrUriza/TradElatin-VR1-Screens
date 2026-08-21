@@ -4,6 +4,7 @@ from typing import Any
 from urllib.parse import quote
 
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from dash import Input, Output, callback, dcc, html
 
 from screen_core.components import (
@@ -12,8 +13,14 @@ from screen_core.components import (
     screen_page,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import locale_context, localize_component_tree, localized_href, locale_from_search
+from screen_core.i18n import locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.figures import apply_analysis_figure_layout
+from screen_core.market_readers import (
+    POSITIONING_VARIANTS,
+    extract_positioning_snapshot,
+    positioning_timeframes,
+    selector_values,
+)
 
 
 ROUTE = "/long-short-liquidations"
@@ -152,6 +159,61 @@ LOCAL_CSS = """
     display: flex;
     gap: 6px;
     align-items: center;
+}
+
+.liq-position-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(100px, .8fr) minmax(90px, .65fr);
+    gap: 6px;
+    align-items: center;
+    padding: 5px 8px;
+    border-bottom: 1px solid rgba(23,50,71,.55);
+    background: rgba(7,21,34,.72);
+}
+
+.liq-position-control {
+    min-width: 0;
+}
+
+.liq-position-control-label {
+    display: block;
+    margin-bottom: 2px;
+    color: #7890a3;
+    font-size: 6.5px;
+    font-weight: 700;
+    letter-spacing: .45px;
+    text-transform: uppercase;
+}
+
+.liq-position-variant {
+    display: flex !important;
+    gap: 3px;
+    white-space: nowrap;
+}
+
+.liq-position-variant label {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 3px;
+    margin: 0 !important;
+    color: #b9cbd8;
+    font-size: 7px;
+}
+
+.liq-position-variant input {
+    accent-color: #26b8d7;
+}
+
+.liq-position-select .Select-control,
+.liq-position-select .Select-menu-outer,
+.liq-position-select .Select-menu {
+    background: #071522 !important;
+    border-color: #173247 !important;
+    color: #d9e8f5 !important;
+}
+
+@media (max-width: 1180px) {
+    .liq-position-controls { grid-template-columns: 1fr; }
 }
 
 .liq-analysis-link {
@@ -1355,61 +1417,127 @@ def _dt(value: Any):
         return None
 
 
-def _long_short_positioning_figure(contract: dict[str, Any], height: int = 365) -> go.Figure:
-    chart = _safe_dict(_safe_dict(contract.get("charts")).get("long_short_positioning"))
-    points = [
-        item for item in _safe_list(chart.get("points"))
-        if isinstance(item, dict) and item.get("timestamp") is not None
-    ]
-    fig = go.Figure()
+def _positioning_variant_label(variant: str) -> str:
+    return {
+        "top_position": "TOP POSITION",
+        "top_account": "TOP ACCOUNT",
+        "global_account": "GLOBAL ACCOUNT",
+    }.get(variant, "TOP POSITION")
 
-    if points:
-        x = [_dt(item.get("timestamp")) for item in points]
-        series_specs = (
-            ("top_position_ratio", "TOP POSITION L/S", CYAN, 1.8),
-            ("top_account_ratio", "TOP ACCOUNT L/S", PURPLE, 1.15),
-            ("global_account_ratio", "GLOBAL ACCOUNT L/S", YELLOW, 1.15),
+
+def _long_short_positioning_figure(
+    contract: dict[str, Any],
+    *,
+    variant: str = "top_position",
+    exchange: str | None = None,
+    timeframe: str | None = None,
+    height: int = 205,
+) -> go.Figure:
+    snapshot = extract_positioning_snapshot(
+        contract,
+        variant=variant,
+        exchange=exchange,
+        timeframe=timeframe,
+    )
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        row_heights=[0.58, 0.42],
+        vertical_spacing=0.16,
+        specs=[[{"type": "xy"}], [{"type": "xy"}]],
+    )
+
+    if snapshot.long_percent is not None and snapshot.short_percent is not None:
+        long_value = float(snapshot.long_percent)
+        short_value = float(snapshot.short_percent)
+        fig.add_trace(
+            go.Bar(
+                x=[long_value], y=["POSITIONING"], orientation="h",
+                name="LONG", marker_color=GREEN,
+                text=[f"LONG {long_value:.1f}%"], textposition="inside",
+                insidetextanchor="middle",
+                hovertemplate="LONG %{x:.1f}%<extra></extra>",
+            ),
+            row=1, col=1,
         )
-        for field, name, color, width in series_specs:
-            y = [item.get(field) for item in points]
-            fig.add_trace(go.Scatter(
-                x=x, y=y, mode="lines", name=name,
-                line={"color": color, "width": width},
-                connectgaps=False,
-                hovertemplate=f"{name}: %{{y:.3f}}<extra></extra>",
-            ))
-        fig.add_hline(
-            y=1.0, line_dash="dot", line_width=1.0,
-            line_color="#8295a6", annotation_text="NEUTRAL 1.0",
-            annotation_position="right",
-            annotation_font={"size": 7, "color": MUTED},
+        fig.add_trace(
+            go.Bar(
+                x=[short_value], y=["POSITIONING"], orientation="h",
+                name="SHORT", marker_color=RED,
+                text=[f"SHORT {short_value:.1f}%"], textposition="inside",
+                insidetextanchor="middle",
+                hovertemplate="SHORT %{x:.1f}%<extra></extra>",
+            ),
+            row=1, col=1,
         )
     else:
+        state = "PARTIAL" if snapshot.status == "partial" else "UNAVAILABLE"
         fig.add_annotation(
-            text="LONG / SHORT POSITIONING UNAVAILABLE",
-            x=.5, y=.5, xref="paper", yref="paper", showarrow=False,
+            text=state,
+            x=.5, y=.79, xref="paper", yref="paper", showarrow=False,
             font={"color": MUTED, "size": 10},
         )
 
-    fig.update_layout(
-        height=height, paper_bgcolor=BG, plot_bgcolor=PLOT_BG,
-        margin={"l": 44, "r": 20, "t": 30, "b": 42},
-        font={"family": "Inter, Segoe UI, Arial, sans-serif", "size": 8, "color": TEXT},
-        hovermode="x unified",
-        legend={
-            "orientation": "h", "x": 0, "y": 1.02,
-            "xanchor": "left", "yanchor": "bottom",
-            "font": {"size": 7, "color": MUTED},
-            "bgcolor": "rgba(0,0,0,0)",
-        },
-        uirevision="liq-long-short-positioning",
+    if snapshot.history:
+        x = [_dt(item[0]) for item in snapshot.history]
+        y = [item[1] for item in snapshot.history]
+        fig.add_trace(
+            go.Scatter(
+                x=x, y=y, mode="lines", name=f"{_positioning_variant_label(variant)} L/S",
+                line={"color": CYAN, "width": 1.35},
+                connectgaps=False, showlegend=False,
+                hovertemplate="L/S %{y:.3f}<extra></extra>",
+            ),
+            row=2, col=1,
+        )
+        fig.add_hline(
+            y=1.0, line_dash="dot", line_width=.9, line_color="#8295a6",
+            row=2, col=1,
+        )
+    else:
+        fig.add_annotation(
+            text="HISTORY —",
+            x=.5, y=.12, xref="paper", yref="paper", showarrow=False,
+            font={"color": MUTED, "size": 7},
+        )
+
+    ratio_text = f"RATIO {snapshot.ratio:.3f}" if snapshot.ratio is not None else "RATIO —"
+    exchange_text = str(snapshot.exchange or exchange or "—").upper()
+    timeframe_text = str(snapshot.timeframe or timeframe or "—")
+    fig.add_annotation(
+        text=f"{_positioning_variant_label(variant)}   ·   {ratio_text}   ·   EXCHANGE {exchange_text}   ·   TF {timeframe_text}",
+        x=.5, y=1.07, xref="paper", yref="paper", showarrow=False,
+        font={"color": TEXT, "size": 7.5}, align="center",
     )
-    fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 8, "color": MUTED})
-    fig.update_yaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 8, "color": MUTED}, title_text="L/S Ratio")
+    fig.update_layout(
+        height=height,
+        barmode="stack",
+        paper_bgcolor=BG,
+        plot_bgcolor=PLOT_BG,
+        margin={"l": 34, "r": 16, "t": 28, "b": 24},
+        font={"family": "Inter, Segoe UI, Arial, sans-serif", "size": 8, "color": TEXT},
+        showlegend=False,
+        hovermode="x unified",
+        uirevision=f"liq-long-short-{variant}-{exchange_text}-{timeframe_text}",
+    )
+    fig.update_xaxes(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, row=1, col=1)
+    fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=1)
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 7, "color": MUTED}, row=2, col=1)
+    fig.update_yaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 7, "color": MUTED}, title_text="L/S", row=2, col=1)
     return fig
 
 
-def _positioning_card(contract: dict[str, Any], height: int = 365) -> html.Div:
+def _positioning_card(contract: dict[str, Any], height: int = 270) -> html.Div:
+    exchange_values, exchange_default = selector_values(contract, "exchange")
+    timeframe_values, timeframe_default = positioning_timeframes(contract)
+    variant_options = [
+        {"label": "TOP POSITION", "value": "top_position"},
+        {"label": "TOP ACCOUNT", "value": "top_account"},
+        {"label": "GLOBAL ACCOUNT", "value": "global_account"},
+    ]
+    exchange_options = [{"label": item.upper(), "value": item} for item in exchange_values]
+    timeframe_options = [{"label": item, "value": item} for item in timeframe_values]
+    graph_height = max(170, height - 65)
     return html.Div(
         className="liq-position-card",
         children=[
@@ -1418,7 +1546,7 @@ def _positioning_card(contract: dict[str, Any], height: int = 365) -> html.Div:
                 children=[
                     html.Div(
                         contextual_help_label(
-                            "LONG / SHORT POSITIONING",
+                            "LONG / SHORT RATIO",
                             family="liquidations",
                             section="screen_a",
                             key="long_short_positioning",
@@ -1434,14 +1562,98 @@ def _positioning_card(contract: dict[str, Any], height: int = 365) -> html.Div:
                     ),
                 ],
             ),
+            html.Div(
+                className="liq-position-controls",
+                children=[
+                    html.Div(
+                        className="liq-position-control",
+                        children=[
+                            html.Span("VARIANT", className="liq-position-control-label"),
+                            dcc.RadioItems(
+                                id="long-short-variant-selector",
+                                options=variant_options,
+                                value="top_position",
+                                inline=True,
+                                className="liq-position-variant",
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="liq-position-control",
+                        children=[
+                            html.Span("EXCHANGE", className="liq-position-control-label"),
+                            dcc.Dropdown(
+                                id="long-short-exchange-selector",
+                                options=exchange_options,
+                                value=exchange_default,
+                                clearable=False,
+                                searchable=False,
+                                disabled=not bool(exchange_options),
+                                className="dark-dropdown liq-position-select",
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        className="liq-position-control",
+                        children=[
+                            html.Span("TIMEFRAME", className="liq-position-control-label"),
+                            dcc.Dropdown(
+                                id="long-short-timeframe-selector",
+                                options=timeframe_options,
+                                value=timeframe_default,
+                                clearable=False,
+                                searchable=False,
+                                disabled=not bool(timeframe_options),
+                                placeholder="—",
+                                className="dark-dropdown liq-position-select",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
             dcc.Graph(
                 id="long-short-positioning-chart",
-                figure=_long_short_positioning_figure(contract, height=height),
+                figure=_long_short_positioning_figure(
+                    contract,
+                    variant="top_position",
+                    exchange=exchange_default,
+                    timeframe=timeframe_default,
+                    height=graph_height,
+                ),
                 config={"displaylogo": False, "responsive": True, "scrollZoom": False},
-                style={"height": f"{height}px", "minHeight": f"{height}px", "width": "100%"},
+                style={"height": f"{graph_height}px", "minHeight": f"{graph_height}px", "width": "100%"},
             ),
         ],
     )
+
+
+@callback(
+    Output("long-short-positioning-chart", "figure"),
+    Input("long-short-variant-selector", "value", allow_optional=True),
+    Input("long-short-exchange-selector", "value", allow_optional=True),
+    Input("long-short-timeframe-selector", "value", allow_optional=True),
+    Input("reload-json", "n_clicks"),
+    Input("url", "search"),
+    prevent_initial_call=True,
+)
+def update_long_short_positioning(
+    variant: str | None,
+    exchange: str | None,
+    timeframe: str | None,
+    _reload: int | None,
+    search: str | None,
+) -> go.Figure:
+    from screen_core.contract_loader import load_contract
+
+    locale = locale_from_search(search)
+    figure = _long_short_positioning_figure(
+        load_contract(CONTRACT_FILE),
+        variant=variant if variant in POSITIONING_VARIANTS else "top_position",
+        exchange=exchange,
+        timeframe=timeframe,
+        height=205,
+    )
+    return localize_figure(figure, locale)
 
 
 ANALYSIS_LABELS = {

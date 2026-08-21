@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import time
 from types import ModuleType
 from typing import Any
 
@@ -8,6 +9,7 @@ from dash import Dash, Input, Output, State, ctx, dcc, html, no_update
 
 from screen_core.contract_loader import active_badges, contract_revision, load_contract, screen_metadata, selector_spec
 from screen_core.formatting import format_timestamp
+from screen_core.refresh import FAMILY_AUTO_REFRESH_MS, refresh_timeout_seconds, request_family_refresh_async
 from screen_core.i18n import (
     locale_context,
     locale_from_search,
@@ -39,12 +41,20 @@ SCREENS: tuple[ModuleType, ...] = (
 SCREEN_BY_ROUTE = {module.ROUTE: module for module in SCREENS}
 DEFAULT_SCREEN = prices
 
-# Families whose data should refresh automatically according to the selected
-# timeframe. All other families use the manual RELOAD button.
+# Processing cadence is family-owned and independent from chart timeframe.
+FAMILY_KEY_BY_ROUTE = {
+    prices.ROUTE: "prices",
+    cvd_volume_orderflow.ROUTE: "cvd",
+    open_interest_and_funding.ROUTE: "open_interest",
+    etf_exchange_flows.ROUTE: "etf",
+    on_chain_miners.ROUTE: "on_chain",
+    volatility_market_regimes.ROUTE: "volatility",
+    long_short_liquidations.ROUTE: "liquidations",
+    liquidity_microstructure.ROUTE: "liquidity",
+}
 AUTO_REFRESH_ROUTES = {
-    prices.ROUTE,
-    cvd_volume_orderflow.ROUTE,
-    open_interest_and_funding.ROUTE,
+    route for route, family in FAMILY_KEY_BY_ROUTE.items()
+    if family in FAMILY_AUTO_REFRESH_MS
 }
 
 # Temporal selector policy is explicit by family. We do not infer temporal
@@ -65,15 +75,8 @@ NO_TEMPORAL_SELECTOR_ROUTES = {
     liquidity_microstructure.ROUTE,
 }
 
-TIMEFRAME_REFRESH_MS = {
-    '1m': 60_000,
-    '5m': 300_000,
-    '15m': 900_000,
-    '1h': 3_600_000,
-    '4h': 14_400_000,
-    '1d': 86_400_000,
-}
 DEFAULT_REFRESH_MS = 60_000
+REFRESH_POLL_MS = 1_000
 
 TRACE_I18N = os.getenv("TRADELATIN_TRACE_I18N", "0").lower() in {"1", "true", "yes"}
 
@@ -274,6 +277,13 @@ def serve_layout() -> html.Div:
                 n_intervals=0,
                 disabled=True,
             ),
+            dcc.Interval(
+                id='refresh-poll',
+                interval=REFRESH_POLL_MS,
+                n_intervals=0,
+                disabled=True,
+            ),
+            dcc.Store(id='refresh-state', storage_type='memory', data={'status': 'idle'}),
             html.Button('', id='reload-json', n_clicks=0, style={'display': 'none'}),
             html.Header(
                 className='topbar',
@@ -351,6 +361,7 @@ def serve_layout() -> html.Div:
                             html.Div(
                                 className='compact-family-meta',
                                 children=[
+                                    html.Span(id='refresh-state-badge', className='status-badge status-warning', style={'display': 'none'}),
                                     html.Div(id='app-badge-row', className='badge-row'),
                                     html.Div(
                                         [
@@ -578,38 +589,127 @@ def sync_compact_header(pathname: str | None, search: str | None, _reload_clicks
     Output('auto-refresh', 'disabled'),
     Output('auto-refresh', 'interval'),
     Input('url', 'pathname'),
-    Input('timeframe-selector', 'value'),
 )
-def sync_refresh_policy(
-    pathname: str | None,
-    timeframe: str | None,
-) -> tuple[dict[str, Any], bool, int]:
+def sync_refresh_policy(pathname: str | None) -> tuple[dict[str, Any], bool, int]:
     module = get_screen(pathname)
-
     reload_style = {'display': 'inline-flex'}
-
-    if module.ROUTE in AUTO_REFRESH_ROUTES:
-        interval = TIMEFRAME_REFRESH_MS.get(timeframe or '', DEFAULT_REFRESH_MS)
-        return reload_style, False, interval
-
+    family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE)
+    interval = FAMILY_AUTO_REFRESH_MS.get(str(family or ''))
+    if interval is not None:
+        return reload_style, False, int(interval)
     return reload_style, True, DEFAULT_REFRESH_MS
 
 
 @app.callback(
     Output('reload-json', 'n_clicks'),
+    Output('refresh-state', 'data'),
+    Output('refresh-poll', 'disabled'),
     Input('auto-refresh', 'n_intervals'),
     Input('manual-reload', 'n_clicks'),
+    Input('refresh-poll', 'n_intervals'),
+    State('url', 'pathname'),
     State('reload-json', 'n_clicks'),
+    State('refresh-state', 'data'),
     prevent_initial_call=True,
 )
-def dispatch_refresh(
+def orchestrate_family_refresh(
     _auto_ticks: int | None,
     _manual_clicks: int | None,
+    _poll_ticks: int | None,
+    pathname: str | None,
     current_signal: int | None,
-) -> Any:
-    if ctx.triggered_id not in {'auto-refresh', 'manual-reload'}:
-        return no_update
-    return int(current_signal or 0) + 1
+    refresh_state: dict[str, Any] | None,
+) -> tuple[Any, dict[str, Any], bool]:
+    module = get_screen(pathname)
+    family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE, module.ROUTE.strip('/') or 'prices')
+    state = refresh_state if isinstance(refresh_state, dict) else {'status': 'idle'}
+    trigger = ctx.triggered_id
+
+    if trigger in {'auto-refresh', 'manual-reload'}:
+        if state.get('status') == 'updating':
+            return no_update, state, False
+        reason = 'manual' if trigger == 'manual-reload' else 'auto'
+        baseline = contract_revision(module.CONTRACT_FILE)
+        dispatch = request_family_refresh_async(
+            family=family,
+            reason=reason,
+            contract_file=module.CONTRACT_FILE,
+        )
+        if not dispatch.configured:
+            # Standalone HMI mode: no Processing refresh endpoint is configured.
+            # Re-read only the currently visible family contract.
+            return int(current_signal or 0) + 1, {'status': 'idle'}, True
+        next_state = {
+            'status': 'updating',
+            'family': family,
+            'route': module.ROUTE,
+            'contract_file': module.CONTRACT_FILE,
+            'baseline_revision': baseline,
+            'started_at': time.time(),
+            'reason': reason,
+        }
+        return no_update, next_state, False
+
+    if trigger == 'refresh-poll':
+        if state.get('status') != 'updating':
+            return no_update, state, True
+        contract_file = str(state.get('contract_file') or module.CONTRACT_FILE)
+        baseline = str(state.get('baseline_revision') or '')
+        current_revision = contract_revision(contract_file)
+        if current_revision != baseline and current_revision != 'missing':
+            try:
+                # Only expose the new state after the producer has published a
+                # complete, parseable JSON.  Until then, the last valid screen
+                # remains visible.
+                load_contract(contract_file)
+            except Exception:
+                return no_update, state, False
+            completed = {
+                'status': 'idle',
+                'family': state.get('family'),
+                'completed_at': time.time(),
+            }
+            current_family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE)
+            if current_family == state.get('family'):
+                return int(current_signal or 0) + 1, completed, True
+            return no_update, completed, True
+
+        try:
+            elapsed = time.time() - float(state.get('started_at'))
+        except (TypeError, ValueError):
+            elapsed = 0.0
+        if elapsed >= refresh_timeout_seconds():
+            timeout_state = {**state, 'status': 'timeout', 'finished_at': time.time()}
+            return no_update, timeout_state, True
+        return no_update, state, False
+
+    return no_update, state, True
+
+
+@app.callback(
+    Output('refresh-state-badge', 'children'),
+    Output('refresh-state-badge', 'className'),
+    Output('refresh-state-badge', 'style'),
+    Input('refresh-state', 'data'),
+    Input('url', 'pathname'),
+    Input('url', 'search'),
+)
+def render_refresh_status(
+    refresh_state: dict[str, Any] | None,
+    pathname: str | None,
+    search: str | None,
+) -> tuple[str, str, dict[str, str]]:
+    state = refresh_state if isinstance(refresh_state, dict) else {}
+    module = get_screen(pathname)
+    current_family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE)
+    if state.get('family') not in {None, current_family}:
+        return '', 'status-badge status-warning', {'display': 'none'}
+    locale = locale_from_search(search)
+    if state.get('status') == 'updating':
+        return tr('UPDATING', locale), 'status-badge status-warning', {'display': 'inline-flex'}
+    if state.get('status') == 'timeout':
+        return tr('REFRESH TIMEOUT', locale), 'status-badge status-danger', {'display': 'inline-flex'}
+    return '', 'status-badge status-warning', {'display': 'none'}
 
 
 @app.callback(

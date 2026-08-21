@@ -5,6 +5,7 @@ from typing import Any
 from urllib.parse import quote
 
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from dash import Input, Output, callback, ctx, dcc, html, no_update
 
 from screen_core.components import (
@@ -19,6 +20,7 @@ from screen_core.i18n import current_locale, locale_context, localize_component_
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
+from screen_core.market_readers import FlowSnapshot, extract_flow_snapshot
 
 
 ROUTE = "/cvd-orderflow"
@@ -1081,167 +1083,143 @@ def _cvd_candlestick_figure(
 
 
 
+def _flow_chart_for_market(charts: dict[str, Any], market: str) -> dict[str, Any]:
+    """Return the Processing-published flow block without deriving flow in HMI."""
+    if market == "spot":
+        keys = ("spot_flow", "spot_order_flow", "delta_buy_sell_spot")
+    else:
+        keys = ("perpetual_flow", "futures_flow", "futures_order_flow", "delta_buy_sell_futures")
+    for key in keys:
+        candidate = charts.get(key)
+        if isinstance(candidate, dict):
+            return candidate
+    return {}
+
+
+def _flow_label(chart: dict[str, Any], market: str) -> str:
+    explicit = chart.get("flow_label") or chart.get("market_label")
+    if explicit:
+        label = str(explicit).upper()
+        return label if "FLOW" in label else f"{label} FLOW"
+    if market == "spot":
+        return "SPOT FLOW"
+    chart_id = str(chart.get("chart_id") or chart.get("id") or "").lower()
+    if "perpetual" in chart_id:
+        return "PERPETUAL FLOW"
+    if "futures" in chart_id:
+        return "FUTURES FLOW"
+    return "FUTURES / PERPETUAL FLOW"
+
+
+def _flow_net_text(snapshot: FlowSnapshot) -> str:
+    if snapshot.net_value is None:
+        return "NET —"
+    field = str(snapshot.net_field or "").lower()
+    value = float(snapshot.net_value)
+    if "share" in field:
+        value *= 100.0
+    if "pct" in field or "percent" in field or "share" in field:
+        return f"NET {value:+.1f}%"
+    return f"NET {value:+,.2f}"
+
+
 def _delta_buy_sell_figure(
     chart: dict[str, Any] | None,
     *,
     timeframe: str | None,
     height: int = 232,
 ) -> go.Figure:
-    fig = go.Figure()
+    """Render Processing-published Spot/Futures flow as a fast 0–100% read.
 
-    if not isinstance(chart, dict):
-        return fig
-
-    by_timeframe = _safe_dict(
-        chart.get("series_by_timeframe")
+    The legacy function name is retained so existing callback IDs remain stable.
+    Dash never derives buy/sell shares from delta or a ratio.  If Processing does
+    not publish the percentage/share fields, the flow card is unavailable.
+    """
+    chart_dict = chart if isinstance(chart, dict) else {}
+    snapshot = extract_flow_snapshot(chart_dict, timeframe=timeframe)
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        row_heights=[0.58, 0.42],
+        vertical_spacing=0.15,
+        specs=[[{"type": "xy"}], [{"type": "xy"}]],
     )
 
-    selected = (
-        timeframe
-        if timeframe in by_timeframe
-        else str(chart.get("selected_timeframe") or "")
-    )
-
-    if selected not in by_timeframe:
-        selected = next(iter(by_timeframe), "")
-
-    block = _safe_dict(
-        by_timeframe.get(selected)
-    )
-    bars = [
-        bar
-        for bar in _safe_list(block.get("bars"))
-        if isinstance(bar, dict)
-    ]
-
-    if not bars:
+    if snapshot.buy_percent is not None and snapshot.sell_percent is not None:
+        buy = float(snapshot.buy_percent)
+        sell = float(snapshot.sell_percent)
+        fig.add_trace(
+            go.Bar(
+                x=[buy], y=["FLOW"], orientation="h", name="BUY FLOW",
+                marker_color=GREEN,
+                text=[f"BUY {buy:.1f}%"], textposition="inside",
+                insidetextanchor="middle", hovertemplate="BUY %{x:.1f}%<extra></extra>",
+            ),
+            row=1, col=1,
+        )
+        fig.add_trace(
+            go.Bar(
+                x=[sell], y=["FLOW"], orientation="h", name="SELL FLOW",
+                marker_color=RED,
+                text=[f"SELL {sell:.1f}%"], textposition="inside",
+                insidetextanchor="middle", hovertemplate="SELL %{x:.1f}%<extra></extra>",
+            ),
+            row=1, col=1,
+        )
+    else:
+        state = "PARTIAL" if snapshot.status == "partial" else "UNAVAILABLE"
         fig.add_annotation(
-            text="UNAVAILABLE",
-            x=.5,
-            y=.5,
-            xref="paper",
-            yref="paper",
-            showarrow=False,
-            font={"color": MUTED},
+            text=state,
+            x=.5, y=.78, xref="paper", yref="paper", showarrow=False,
+            font={"color": MUTED, "size": 11},
         )
-        return fig
 
-    x = [
-        _dt(bar.get("timestamp"))
-        for bar in bars
-    ]
-    delta_values = [
-        float(
-            bar.get("delta_buy_sell_usd")
-            or 0.0
-        )
-        for bar in bars
-    ]
-    ma_values = [
-        bar.get("delta_ma_21")
-        for bar in bars
-    ]
-
-    fig.add_trace(
-        go.Bar(
-            x=x,
-            y=delta_values,
-            name="Delta",
-            marker_color=[
-                GREEN
-                if value >= 0
-                else RED
-                for value in delta_values
-            ],
-            showlegend=False,
-            hovertemplate=(
-                "DELTA: %{y:,.2f}"
-                "<extra></extra>"
+    if snapshot.history:
+        hx = [_dt(item[0]) for item in snapshot.history]
+        hy = [item[1] for item in snapshot.history]
+        fig.add_trace(
+            go.Scatter(
+                x=hx, y=hy, mode="lines", name="NET FLOW HISTORY",
+                line={"color": "#22c7ff", "width": 1.35},
+                showlegend=False,
+                hovertemplate="NET %{y:,.2f}<extra></extra>",
             ),
+            row=2, col=1,
         )
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=x,
-            y=ma_values,
-            mode="lines",
-            name="Delta MA(21)",
-            line={
-                "color": "#f2a900",
-                "width": 1.4,
-            },
-            connectgaps=False,
-            showlegend=False,
-            hovertemplate=(
-                "MA(21): %{y:,.2f}"
-                "<extra></extra>"
-            ),
+        fig.add_hline(
+            y=0, line_dash="dot", line_width=.8,
+            line_color="rgba(127,150,170,.55)", row=2, col=1,
         )
-    )
+    else:
+        fig.add_annotation(
+            text="HISTORY —",
+            x=.5, y=.12, xref="paper", yref="paper", showarrow=False,
+            font={"color": MUTED, "size": 7},
+        )
 
-    maximum = max(
-        [
-            abs(value)
-            for value in delta_values
-        ]
-        + [1.0]
+    exchange = snapshot.exchange or str(chart_dict.get("exchange") or chart_dict.get("exchange_name") or "—")
+    tf = snapshot.timeframe or timeframe or "—"
+    fig.add_annotation(
+        text=f"{_flow_net_text(snapshot)}   ·   EXCHANGE {str(exchange).upper()}   ·   TF {tf}",
+        x=.5, y=1.07, xref="paper", yref="paper", showarrow=False,
+        font={"color": TEXT, "size": 8}, align="center",
     )
-
     fig.update_layout(
-        title=None,
         height=height,
+        barmode="stack",
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
-        margin={
-            "l": 42,
-            "r": 10,
-            "t": 32,
-            "b": 24,
-        },
-        font={
-            "family": (
-                "Inter, Segoe UI, sans-serif"
-            ),
-            "color": TEXT,
-            "size": 7,
-        },
-        hovermode="x unified",
+        margin={"l": 34, "r": 16, "t": 30, "b": 26},
+        font={"family": "Inter, Segoe UI, sans-serif", "color": TEXT, "size": 8},
         showlegend=False,
-        bargap=.14,
-        uirevision=(
-            f"{chart.get('chart_id')}-{selected}"
-        ),
+        hovermode="x unified",
+        uirevision=f"cvd-flow-{timeframe or 'default'}",
     )
-
-    fig.update_xaxes(
-        gridcolor=GRID,
-        zeroline=False,
-        tickfont={
-            "color": MUTED,
-            "size": 7,
-        },
-    )
-    fig.update_yaxes(
-        range=[
-            -maximum * 1.12,
-            maximum * 1.12,
-        ],
-        gridcolor=GRID,
-        zeroline=True,
-        zerolinecolor=(
-            "rgba(91,151,194,.62)"
-        ),
-        zerolinewidth=1,
-        tickfont={
-            "color": MUTED,
-            "size": 7,
-        },
-        tickformat="~s",
-    )
-
+    fig.update_xaxes(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, row=1, col=1)
+    fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=1)
+    fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"color": MUTED, "size": 7}, row=2, col=1)
+    fig.update_yaxes(gridcolor=GRID, zeroline=True, zerolinecolor="rgba(91,151,194,.42)", tickfont={"color": MUTED, "size": 7}, row=2, col=1)
     return fig
-
 
 def _indicator_figure(
     contract: dict[str, Any],
@@ -1775,7 +1753,7 @@ def _main_candle_grid(
                         children=[
                             html.Div(
                                 contextual_help_label(
-                                    "SPOT BUY / SELL DELTA" if market == "spot" else "FUTURES BUY / SELL DELTA",
+                                    _flow_label(_flow_chart_for_market(charts, market), market),
                                     family="cvd",
                                     section="screen_a",
                                     key="delta_buy_sell_spot" if market == "spot" else "delta_buy_sell_futures",
@@ -1786,11 +1764,7 @@ def _main_candle_grid(
                                 id=delta_component_id,
                                 figure=(
                                     _delta_buy_sell_figure(
-                                        _safe_dict(
-                                            charts.get(
-                                                delta_chart_id
-                                            )
-                                        ),
+                                        _flow_chart_for_market(charts, market),
                                         timeframe=timeframe,
                                     )
                                 ),
@@ -1865,19 +1839,11 @@ def update_cvd_candles(
             selected,
         ),
         _delta_buy_sell_figure(
-            _safe_dict(
-                charts.get(
-                    "delta_buy_sell_spot"
-                )
-            ),
+            _flow_chart_for_market(charts, "spot"),
             timeframe=timeframe,
         ),
         _delta_buy_sell_figure(
-            _safe_dict(
-                charts.get(
-                    "delta_buy_sell_futures"
-                )
-            ),
+            _flow_chart_for_market(charts, "futures"),
             timeframe=timeframe,
         ),
     )
