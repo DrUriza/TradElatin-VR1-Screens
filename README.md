@@ -1,70 +1,55 @@
-# TradELATIN VR1 Screens
+# TradELATIN VR1 Screen V4.2
 
-Bitcoin market-intelligence HMI for eight analysis families:
+Standalone Dash/HMI repository. It does **not** contain or start the Emulator and it does not start Processing.
+The repository includes the latest eight validated contracts as initial data,
+so the HMI is usable immediately after cloning; a separately running Processing
+repository can replace them through `TRADELATIN_CONTRACT_DIR`.
 
-1. Prices
-2. CVD & Order Flow
-3. Open Interest & Funding
-4. ETF & Exchange Flows
-5. On-Chain & Miners
-6. Volatility & Market Regimes
-7. Liquidations & Positioning
-8. Liquidity Microstructure
+## Configuration
+
+- `TRADELATIN_CONTRACT_DIR`: directory containing the eight final JSON contracts. Default: `./data/contracts`.
+- `TRADELATIN_REFRESH_DIR`: directory where manual refresh requests are written. Default: `./data/refresh_requests`.
+- `TRADELATIN_HOST`: default `127.0.0.1`.
+- `TRADELATIN_PORT`: default `8002`.
+
+Automatic UI reread policy:
+
+- Prices: 5 s
+- Liquidity: 5 s
+- CVD: 15 s
+
+CVD timeframes: `5m`, `15m`, `4h` only. Screen rejects stale CVD contracts outside this set.
+
+OI, ETF, On-Chain, Volatility and Liquidations use the manual Reload button.
 
 ## Run
 
-Create/activate the virtual environment and start the single canonical entry point:
+On Windows, `start.bat` or `./start.ps1` creates the local virtual environment
+and starts the HMI. Manual setup:
 
 ```powershell
-.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
 python main.py
 ```
 
-Then open:
+## Indicator selection persistence
 
-```text
-http://127.0.0.1:8002/prices?lang=en
-```
+All eight Screen B families keep indicator checklist state in browser local
+storage. Timeframe changes do not rebuild `page-content` for Prices, CVD and
+Open Interest; their dedicated callbacks update the figures instead. An
+explicit empty selection is valid state and is never replaced by defaults. The
+same selection therefore survives timeframe changes, contract rereads, A/B
+navigation and browser refreshes until the user changes it.
 
-The same Dash process supports **English and Spanish**. Use `EN | ES` in the top bar; language is stored only in the URL (`?lang=en` / `?lang=es`).
+## Final UI corrections
 
-There are no separate English/Spanish servers, cookies, localStorage translators or DOM mutation observers.
+- Prices generic OHLCV volume is colored by candle direction when no true taker buy/sell split exists.
+- CVD and ETF Screen B include native indicator selectors in the right column.
+- On-Chain and Volatility right summaries are current-state snapshots; 7D/30D changes historical charts only.
+- Liquidations Screen B consumes the 1D/7D/30D range selector and reports when the requested window exceeds the frozen 500×15m history available in the contract.
+- While a manual family is updating, contract-completion polling runs every 250 ms.
 
-## Architecture
 
-```text
-Input
-  -> Processing
-  -> Classification
-  -> Contract Builder
-  -> hmi_contract JSON
-  -> Screens/HMI
-```
+## Grok Radar
 
-Screens renders precomputed contract values and does not calculate market analytics.
-
-Financial contracts are language-neutral. UI translations and contextual help are presentation-only.
-
-See:
-
-- `docs/I18N.md`
-- `docs/DEBUGGING.md`
-- `docs/CONTRACT_RULES.md`
-- `docs/VALIDATION.md`
-
-## Contract filenames
-
-Screens keeps canonical golden fixtures such as `prices_VR1_FINAL.json`, but runtime Processing outputs may use concise family names. Supported preferred runtime names are:
-
-```text
-prices.json
-cvd.json
-open_interest.json
-etf.json
-miners.json
-volatility.json
-liquidations.json
-liquidity.json
-```
-
-If both a concise runtime name and its canonical golden fixture exist, the concise runtime file is selected. The resolved filename is visible in the contract revision string for debugging.
+`/grok-radar` is a contractless, on-demand route. It uses `XAI_API_KEY` from the process environment and does not participate in the eight market-family contract refresh pipeline.

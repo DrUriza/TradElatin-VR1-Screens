@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 from urllib.parse import quote
 
@@ -16,7 +17,6 @@ from screen_core.contextual_help import contextual_help_label
 from screen_core.i18n import locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.figures import apply_analysis_figure_layout
 from screen_core.market_readers import (
-    POSITIONING_VARIANTS,
     extract_positioning_snapshot,
     positioning_timeframes,
     selector_values,
@@ -27,7 +27,7 @@ ROUTE = "/long-short-liquidations"
 LABEL = "Liquidations"
 CONTRACT_FILE = "long_short_liquidations_VR1_FINAL.json"
 HAS_ANALYSIS = True
-SCREEN_REVISION = "LIQUIDATIONS_NATIVE_B_LONG_SHORT_V1"
+SCREEN_REVISION = "LIQUIDATIONS_MAPS3_RANGES_1D_7D_30D_V3"
 SELECTION_STORE_ID = "liquidations-analysis-selection"
 ANALYSIS_CONTENT_ID = "liquidations-analysis-content"
 
@@ -163,7 +163,7 @@ LOCAL_CSS = """
 
 .liq-position-controls {
     display: grid;
-    grid-template-columns: minmax(0, 1.45fr) minmax(100px, .8fr) minmax(90px, .65fr);
+    grid-template-columns: minmax(230px, 1.1fr) minmax(100px, .8fr) minmax(90px, .65fr);
     gap: 6px;
     align-items: center;
     padding: 5px 8px;
@@ -183,25 +183,6 @@ LOCAL_CSS = """
     font-weight: 700;
     letter-spacing: .45px;
     text-transform: uppercase;
-}
-
-.liq-position-variant {
-    display: flex !important;
-    gap: 3px;
-    white-space: nowrap;
-}
-
-.liq-position-variant label {
-    display: inline-flex !important;
-    align-items: center;
-    gap: 3px;
-    margin: 0 !important;
-    color: #b9cbd8;
-    font-size: 7px;
-}
-
-.liq-position-variant input {
-    accent-color: #26b8d7;
 }
 
 .liq-position-select .Select-control,
@@ -644,178 +625,6 @@ def _aggregate_bar_series(
     return traces
 
 
-def _binance_bar_series(
-    chart: dict[str, Any],
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Adapt leverage breakdowns to 10x/25x/50x/100x traces."""
-
-    common = _future_common_bar_series(chart, rows)
-    if common:
-        return common
-
-    desired = ("10x", "25x", "50x", "100x")
-    values_by_leverage = {
-        leverage: [0.0] * len(rows)
-        for leverage in desired
-    }
-
-    # First source: leverage_breakdown stored on buckets.
-    for index, row in enumerate(rows):
-        breakdown = _safe_dict(
-            row.get("leverage_breakdown")
-        )
-
-        for leverage in desired:
-            value = _num(breakdown.get(leverage))
-            if value is not None:
-                values_by_leverage[leverage][index] = value
-
-    # Second source: stacked_buckets[].leverage_levels[].
-    by_center = {
-        round(float(row["_center"]), 8): index
-        for index, row in enumerate(rows)
-    }
-
-    for stacked in _safe_list(
-        chart.get("stacked_buckets")
-    ):
-        if not isinstance(stacked, dict):
-            continue
-
-        center = _num(
-            stacked.get("price")
-            if stacked.get("price") is not None
-            else stacked.get("center_price")
-        )
-
-        if center is None:
-            continue
-
-        index = by_center.get(round(center, 8))
-        if index is None:
-            continue
-
-        for level in _safe_list(
-            stacked.get("leverage_levels")
-        ):
-            if not isinstance(level, dict):
-                continue
-
-            leverage = str(
-                level.get("leverage")
-                or level.get("label")
-                or level.get("id")
-                or ""
-            )
-
-            if leverage not in values_by_leverage:
-                continue
-
-            value = None
-            for key in (
-                "value",
-                "level",
-                "liquidation_level",
-                "total_level",
-            ):
-                value = _num(level.get(key))
-                if value is not None:
-                    break
-
-            if value is not None:
-                values_by_leverage[leverage][index] = value
-
-    return [
-        {
-            "id": leverage,
-            "label": leverage,
-            "values": values,
-        }
-        for leverage, values
-        in values_by_leverage.items()
-        if any(value != 0.0 for value in values)
-    ]
-
-
-def _hyperliquid_bar_series(
-    chart: dict[str, Any],
-    rows: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Support the final common contract and a simple long/short series form."""
-
-    common = _future_common_bar_series(chart, rows)
-    if common:
-        return common
-
-    series = [
-        item
-        for item in _safe_list(chart.get("series"))
-        if isinstance(item, dict)
-    ]
-
-    if not series:
-        return []
-
-    by_center = {
-        round(float(row["_center"]), 8): index
-        for index, row in enumerate(rows)
-    }
-
-    traces = []
-
-    for item in series:
-        label = str(
-            item.get("label")
-            or item.get("side")
-            or item.get("id")
-            or "Series"
-        )
-        values = [0.0] * len(rows)
-
-        for point in _safe_list(item.get("points")):
-            if not isinstance(point, dict):
-                continue
-
-            center = None
-            for key in (
-                "price_level",
-                "price",
-                "center_price",
-                "price_center",
-            ):
-                center = _num(point.get(key))
-                if center is not None:
-                    break
-
-            value = None
-            for key in (
-                "value",
-                "level",
-                "liquidation_level",
-            ):
-                value = _num(point.get(key))
-                if value is not None:
-                    break
-
-            if center is None or value is None:
-                continue
-
-            index = by_center.get(round(center, 8))
-            if index is not None:
-                values[index] = value
-
-        traces.append(
-            {
-                "id": label.lower(),
-                "label": label,
-                "values": values,
-            }
-        )
-
-    return traces
-
-
 def _common_curves_from_buckets(
     rows: list[dict[str, Any]],
 ) -> tuple[
@@ -886,28 +695,87 @@ def _trace_color(
 ) -> str:
     normalized = label.lower()
 
+    # CoinGlass liquidation-map convention: long-liquidation exposure is red
+    # below current price; short-liquidation exposure is green above it.
     if normalized == "long":
-        return GREEN
-    if normalized == "short":
         return RED
+    if normalized == "short":
+        return GREEN
+    if normalized == "binance":
+        return ORANGE
+    if normalized == "okx":
+        return YELLOW
+    if normalized == "bybit":
+        return CYAN
+    if normalized.startswith("10x"):
+        return CYAN
+    if normalized.startswith("25x"):
+        return BLUE
+    if normalized.startswith("50x"):
+        return YELLOW
+    if normalized.startswith("100x"):
+        return ORANGE
 
-    if map_kind == "binance":
-        palette = [
-            "#315aa8",
-            PURPLE,
-            "#b95c32",
-            ORANGE,
-        ]
-    else:
-        palette = [
-            YELLOW,
-            CYAN,
-            BLUE,
-            PURPLE,
-            ORANGE,
-        ]
+    del map_kind
+    palette = [
+        YELLOW,
+        CYAN,
+        BLUE,
+        PURPLE,
+        ORANGE,
+    ]
 
     return palette[index % len(palette)]
+
+
+def _chart_for_range(chart: dict[str, Any] | None, range_id: str | None) -> dict[str, Any]:
+    base = deepcopy(chart) if isinstance(chart, dict) else {}
+    selected = str(range_id or base.get("selected_range") or "1d").lower()
+    if selected not in {"1d", "7d", "30d"}:
+        selected = "1d"
+    blocks = base.get("range_blocks") if isinstance(base.get("range_blocks"), dict) else {}
+    block = blocks.get(selected) if isinstance(blocks.get(selected), dict) else None
+    if block:
+        base.update(deepcopy(block))
+    base["selected_range"] = selected
+    return base
+
+
+LIQUIDATION_ANALYSIS_RANGE_SECONDS = {
+    "1d": 1 * 24 * 60 * 60,
+    "7d": 7 * 24 * 60 * 60,
+    "30d": 30 * 24 * 60 * 60,
+}
+
+
+def _filter_points_for_range(points: list[dict[str, Any]], range_id: str | None) -> list[dict[str, Any]]:
+    """Filter Screen-B history using the contract timestamp unit.
+
+    Processing uses UNIX seconds today.  The magnitude guard keeps the HMI
+    correct if a future provider publishes milliseconds instead.
+    """
+    selected = str(range_id or "1d").lower()
+    window_seconds = LIQUIDATION_ANALYSIS_RANGE_SECONDS.get(selected)
+    if not points or window_seconds is None:
+        return points
+    timestamps = [
+        int(item.get("timestamp"))
+        for item in points
+        if isinstance(item, dict) and item.get("timestamp") is not None
+    ]
+    if not timestamps:
+        return points
+    last_ts = max(timestamps)
+    unit_scale = 1000 if last_ts > 10_000_000_000 else 1
+    start_ts = last_ts - window_seconds * unit_scale
+    filtered = [
+        item
+        for item in points
+        if isinstance(item, dict)
+        and item.get("timestamp") is not None
+        and int(item.get("timestamp")) >= start_ts
+    ]
+    return filtered or points
 
 
 def _liquidation_map_figure(
@@ -917,7 +785,7 @@ def _liquidation_map_figure(
     map_kind: str,
     height: int,
 ) -> go.Figure:
-    """One renderer for Aggregate, Hyperliquid and Binance leverage maps."""
+    """Render the single public aggregate liquidation map."""
 
     fig = go.Figure()
 
@@ -930,21 +798,10 @@ def _liquidation_map_figure(
         contract,
     )
 
-    if map_kind == "aggregate":
-        bar_series = _aggregate_bar_series(
-            chart,
-            rows,
-        )
-    elif map_kind == "binance":
-        bar_series = _binance_bar_series(
-            chart,
-            rows,
-        )
-    else:
-        bar_series = _hyperliquid_bar_series(
-            chart,
-            rows,
-        )
+    bar_series = _aggregate_bar_series(
+        chart,
+        rows,
+    )
 
     x = [
         float(row["_center"])
@@ -998,11 +855,11 @@ def _liquidation_map_figure(
                 mode="lines",
                 name="Cum. Long Liq Lev",
                 line={
-                    "color": GREEN,
+                    "color": RED,
                     "width": 1.7,
                 },
                 fill="tozeroy",
-                fillcolor="rgba(23,212,155,.12)",
+                fillcolor="rgba(255,80,110,.12)",
                 yaxis="y2",
                 hovertemplate=(
                     "<b>%{x:,.2f}</b>"
@@ -1020,11 +877,11 @@ def _liquidation_map_figure(
                 mode="lines",
                 name="Cum. Short Liq Lev",
                 line={
-                    "color": RED,
+                    "color": GREEN,
                     "width": 1.7,
                 },
                 fill="tozeroy",
-                fillcolor="rgba(255,80,110,.12)",
+                fillcolor="rgba(23,212,155,.12)",
                 yaxis="y2",
                 hovertemplate=(
                     "<b>%{x:,.2f}</b>"
@@ -1074,6 +931,20 @@ def _liquidation_map_figure(
             },
         )
 
+        fig.add_annotation(
+            x=current_price,
+            y=1,
+            xref="x",
+            yref="paper",
+            text=f"Current Price: {current_price:,.0f}",
+            showarrow=False,
+            yshift=16,
+            font={
+                "color": TEXT,
+                "size": 8,
+            },
+        )
+
     status = str(
         chart.get("status")
         or (
@@ -1109,17 +980,7 @@ def _liquidation_map_figure(
 
     title = (
         chart.get("title")
-        or {
-            "aggregate": (
-                "BITCOIN EXCHANGE LIQUIDATION MAP"
-            ),
-            "hyperliquid": (
-                "HYPERLIQUID LIQUIDATION MAP"
-            ),
-            "binance": (
-                "BINANCE BTC/USDT LIQUIDATION MAP"
-            ),
-        }[map_kind]
+        or "BITCOIN EXCHANGE LIQUIDATION MAP"
     )
 
     unit = (
@@ -1202,7 +1063,7 @@ def _liquidation_map_figure(
             "fixedrange": True,
         },
         uirevision=(
-            f"liquidation-map-{map_kind}"
+            f"liquidation-map-{map_kind}-{chart.get('selected_range', '1d')}"
         ),
     )
 
@@ -1273,7 +1134,6 @@ def _side_panel(
 
     # Keep the compact summary focused on scalar/classification rows.
     excluded = {
-        "provider_confirmations",
         "screen_quality_summary",
     }
 
@@ -1306,12 +1166,15 @@ def _side_panel(
             )
         )
 
+    summary_title = str(panel.get("title") or "LIQUIDITY TARGET SUMMARY")
+    if not summary_title.upper().startswith("CURRENT "):
+        summary_title = f"CURRENT {summary_title}"
+
     return html.Div(
         className="liq-summary-panel",
         children=[
             html.Div(
-                panel.get("title")
-                or "LIQUIDITY TARGET SUMMARY",
+                summary_title,
                 className="liq-summary-title",
             ),
             *rows,
@@ -1326,28 +1189,15 @@ def _map_card(
     map_kind: str,
     graph_id: str,
     height: int,
+    range_id: str | None = None,
 ) -> html.Div:
-    chart_dict = (
-        chart
-        if isinstance(chart, dict)
-        else {}
-    )
+    chart_dict = _chart_for_range(chart, range_id)
 
     proxy = bool(chart_dict.get("proxy"))
 
     chart_title = (
         chart_dict.get("title")
-        or {
-            "aggregate": (
-                "BITCOIN EXCHANGE LIQUIDATION MAP"
-            ),
-            "hyperliquid": (
-                "HYPERLIQUID LIQUIDATION MAP"
-            ),
-            "binance": (
-                "BINANCE BTC/USDT LIQUIDATION MAP"
-            ),
-        }[map_kind]
+        or "BITCOIN EXCHANGE LIQUIDATION MAP"
     )
 
     header_children: list[Any] = [
@@ -1356,7 +1206,7 @@ def _map_card(
                 str(chart_title).upper(),
                 family="liquidations",
                 section="screen_a",
-                key={"aggregate": "aggregate_map", "hyperliquid": "hyperliquid_map", "binance": "binance_leverage_map"}[map_kind],
+                key=str(chart_dict.get("id") or graph_id),
                 class_name="liq-chart-title",
             ),
             title=str(chart_title).upper(),
@@ -1417,25 +1267,15 @@ def _dt(value: Any):
         return None
 
 
-def _positioning_variant_label(variant: str) -> str:
-    return {
-        "top_position": "TOP POSITION",
-        "top_account": "TOP ACCOUNT",
-        "global_account": "GLOBAL ACCOUNT",
-    }.get(variant, "TOP POSITION")
-
-
 def _long_short_positioning_figure(
     contract: dict[str, Any],
     *,
-    variant: str = "top_position",
     exchange: str | None = None,
     timeframe: str | None = None,
     height: int = 205,
 ) -> go.Figure:
     snapshot = extract_positioning_snapshot(
         contract,
-        variant=variant,
         exchange=exchange,
         timeframe=timeframe,
     )
@@ -1483,7 +1323,7 @@ def _long_short_positioning_figure(
         y = [item[1] for item in snapshot.history]
         fig.add_trace(
             go.Scatter(
-                x=x, y=y, mode="lines", name=f"{_positioning_variant_label(variant)} L/S",
+                x=x, y=y, mode="lines", name="L/S",
                 line={"color": CYAN, "width": 1.35},
                 connectgaps=False, showlegend=False,
                 hovertemplate="L/S %{y:.3f}<extra></extra>",
@@ -1505,7 +1345,7 @@ def _long_short_positioning_figure(
     exchange_text = str(snapshot.exchange or exchange or "—").upper()
     timeframe_text = str(snapshot.timeframe or timeframe or "—")
     fig.add_annotation(
-        text=f"{_positioning_variant_label(variant)}   ·   {ratio_text}   ·   EXCHANGE {exchange_text}   ·   TF {timeframe_text}",
+        text=f"{ratio_text}   ·   EXCHANGE {exchange_text}   ·   TF {timeframe_text}",
         x=.5, y=1.07, xref="paper", yref="paper", showarrow=False,
         font={"color": TEXT, "size": 7.5}, align="center",
     )
@@ -1518,7 +1358,7 @@ def _long_short_positioning_figure(
         font={"family": "Inter, Segoe UI, Arial, sans-serif", "size": 8, "color": TEXT},
         showlegend=False,
         hovermode="x unified",
-        uirevision=f"liq-long-short-{variant}-{exchange_text}-{timeframe_text}",
+        uirevision=f"liq-long-short-{exchange_text}-{timeframe_text}",
     )
     fig.update_xaxes(range=[0, 100], showgrid=False, zeroline=False, showticklabels=False, row=1, col=1)
     fig.update_yaxes(showgrid=False, zeroline=False, showticklabels=False, row=1, col=1)
@@ -1527,14 +1367,9 @@ def _long_short_positioning_figure(
     return fig
 
 
-def _positioning_card(contract: dict[str, Any], height: int = 270) -> html.Div:
+def _positioning_card(contract: dict[str, Any], height: int = 220) -> html.Div:
     exchange_values, exchange_default = selector_values(contract, "exchange")
     timeframe_values, timeframe_default = positioning_timeframes(contract)
-    variant_options = [
-        {"label": "TOP POSITION", "value": "top_position"},
-        {"label": "TOP ACCOUNT", "value": "top_account"},
-        {"label": "GLOBAL ACCOUNT", "value": "global_account"},
-    ]
     exchange_options = [{"label": item.upper(), "value": item} for item in exchange_values]
     timeframe_options = [{"label": item, "value": item} for item in timeframe_values]
     graph_height = max(170, height - 65)
@@ -1565,19 +1400,6 @@ def _positioning_card(contract: dict[str, Any], height: int = 270) -> html.Div:
             html.Div(
                 className="liq-position-controls",
                 children=[
-                    html.Div(
-                        className="liq-position-control",
-                        children=[
-                            html.Span("VARIANT", className="liq-position-control-label"),
-                            dcc.RadioItems(
-                                id="long-short-variant-selector",
-                                options=variant_options,
-                                value="top_position",
-                                inline=True,
-                                className="liq-position-variant",
-                            ),
-                        ],
-                    ),
                     html.Div(
                         className="liq-position-control",
                         children=[
@@ -1615,7 +1437,6 @@ def _positioning_card(contract: dict[str, Any], height: int = 270) -> html.Div:
                 id="long-short-positioning-chart",
                 figure=_long_short_positioning_figure(
                     contract,
-                    variant="top_position",
                     exchange=exchange_default,
                     timeframe=timeframe_default,
                     height=graph_height,
@@ -1628,8 +1449,34 @@ def _positioning_card(contract: dict[str, Any], height: int = 270) -> html.Div:
 
 
 @callback(
+    Output("hyperliquid-liquidation-map", "figure"),
+    Output("exchange-liquidation-maps", "figure"),
+    Output("binance-liquidation-map", "figure"),
+    Input("range-selector", "value", allow_optional=True),
+    Input("reload-json", "n_clicks"),
+    Input("url", "search"),
+    prevent_initial_call=True,
+)
+def update_liquidation_maps(
+    range_id: str | None,
+    _reload: int | None,
+    search: str | None,
+):
+    from screen_core.contract_loader import load_contract
+
+    contract = load_contract(CONTRACT_FILE)
+    charts = _safe_dict(contract.get("charts"))
+    locale = locale_from_search(search)
+    figures = (
+        _liquidation_map_figure(contract, _chart_for_range(charts.get("hyperliquid_map"), range_id), map_kind="hyperliquid", height=220),
+        _liquidation_map_figure(contract, _chart_for_range(charts.get("exchange_maps"), range_id), map_kind="aggregate", height=220),
+        _liquidation_map_figure(contract, _chart_for_range(charts.get("binance_map"), range_id), map_kind="binance", height=220),
+    )
+    return tuple(localize_figure(figure, locale) for figure in figures)
+
+
+@callback(
     Output("long-short-positioning-chart", "figure"),
-    Input("long-short-variant-selector", "value", allow_optional=True),
     Input("long-short-exchange-selector", "value", allow_optional=True),
     Input("long-short-timeframe-selector", "value", allow_optional=True),
     Input("reload-json", "n_clicks"),
@@ -1637,7 +1484,6 @@ def _positioning_card(contract: dict[str, Any], height: int = 270) -> html.Div:
     prevent_initial_call=True,
 )
 def update_long_short_positioning(
-    variant: str | None,
     exchange: str | None,
     timeframe: str | None,
     _reload: int | None,
@@ -1648,12 +1494,52 @@ def update_long_short_positioning(
     locale = locale_from_search(search)
     figure = _long_short_positioning_figure(
         load_contract(CONTRACT_FILE),
-        variant=variant if variant in POSITIONING_VARIANTS else "top_position",
         exchange=exchange,
         timeframe=timeframe,
-        height=205,
+        height=170,
     )
     return localize_figure(figure, locale)
+
+
+def _realized_liquidations_figure(chart: dict[str, Any], *, height: int = 205) -> go.Figure:
+    points = [row for row in chart.get("points", []) if isinstance(row, dict)]
+    x = [_dt(row.get("timestamp")) for row in points]
+    long_values = [row.get("long_liquidation_usd") for row in points]
+    short_values = [row.get("short_liquidation_usd") for row in points]
+    fig = go.Figure()
+    if points:
+        fig.add_trace(go.Bar(x=x, y=long_values, name="LONG LIQUIDATIONS", marker_color=RED))
+        fig.add_trace(go.Bar(x=x, y=short_values, name="SHORT LIQUIDATIONS", marker_color=GREEN))
+    else:
+        fig.add_annotation(text="UNAVAILABLE", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False, font={"size":10,"color":MUTED})
+    fig.update_layout(height=height, margin={"l":42,"r":12,"t":8,"b":28}, paper_bgcolor=BG, plot_bgcolor=PLOT_BG, font={"color":TEXT,"size":8}, barmode="group", hovermode="x unified", showlegend=True, legend={"orientation":"h","y":1.02,"x":0,"font":{"size":7}}, uirevision="liq-realized-v1")
+    fig.update_xaxes(gridcolor=GRID, tickfont={"size":7,"color":MUTED})
+    fig.update_yaxes(gridcolor=GRID, tickfont={"size":7,"color":MUTED}, title_text="USD")
+    return fig
+
+
+def _liquidation_pressure_figure(chart: dict[str, Any], *, height: int = 205) -> go.Figure:
+    points = [row for row in chart.get("points", []) if isinstance(row, dict)]
+    x = [_dt(row.get("timestamp")) for row in points]
+    pressure = [row.get("liquidation_pressure_score") for row in points]
+    crowding = [row.get("crowding_liquidation_score") for row in points]
+    fig = go.Figure()
+    if points:
+        fig.add_trace(go.Scatter(x=x, y=pressure, mode="lines", name="LIQUIDATION PRESSURE"))
+        fig.add_trace(go.Scatter(x=x, y=crowding, mode="lines", name="CROWDING-ADJUSTED"))
+        fig.add_hline(y=0, line_width=1, opacity=0.45)
+    else:
+        fig.add_annotation(text="UNAVAILABLE", x=0.5, y=0.5, xref="paper", yref="paper", showarrow=False, font={"size":10,"color":MUTED})
+    fig.update_layout(height=height, margin={"l":42,"r":12,"t":8,"b":28}, paper_bgcolor=BG, plot_bgcolor=PLOT_BG, font={"color":TEXT,"size":8}, hovermode="x unified", showlegend=True, legend={"orientation":"h","y":1.02,"x":0,"font":{"size":7}}, uirevision="liq-pressure-v1")
+    fig.update_xaxes(gridcolor=GRID, tickfont={"size":7,"color":MUTED})
+    fig.update_yaxes(gridcolor=GRID, tickfont={"size":7,"color":MUTED}, title_text="SCORE")
+    return fig
+
+
+def _timeseries_card(chart: dict[str, Any] | None, *, graph_id: str, title: str, kind: str, height: int = 220) -> html.Div:
+    chart_dict = chart if isinstance(chart, dict) else {}
+    figure = _realized_liquidations_figure(chart_dict, height=height) if kind == "realized" else _liquidation_pressure_figure(chart_dict, height=height)
+    return html.Div(className="liq-chart-card", style={"minHeight": f"{height + 34}px"}, children=[html.Div(className="liq-chart-header", children=[html.Div(contextual_help_label(title, family="liquidations", section="screen_a", key=graph_id, class_name="liq-chart-title"))]), dcc.Graph(id=graph_id, figure=figure, config={"displaylogo":False,"responsive":True,"scrollZoom":False}, style={"height":f"{height}px","minHeight":f"{height}px","width":"100%"})])
 
 
 ANALYSIS_LABELS = {
@@ -1666,6 +1552,46 @@ ANALYSIS_LABELS = {
 }
 
 ANALYSIS_ORDER = tuple(ANALYSIS_LABELS)
+ANALYSIS_RANGE_SECONDS = {"1d": 86_400, "7d": 7 * 86_400, "30d": 30 * 86_400}
+
+
+def _analysis_points_for_range(points: list[dict[str, Any]], range_id: str | None) -> list[dict[str, Any]]:
+    """Filter Screen-B history by the public 1D/7D/30D selector.
+
+    The side panel remains a current-state snapshot; only historical analysis
+    charts are range-sensitive. If the contract contains less history than the
+    requested window, all available points are shown rather than fabricated.
+    """
+    seconds = ANALYSIS_RANGE_SECONDS.get(str(range_id or "30d").lower())
+    if seconds is None or not points:
+        return points
+    timestamps = [
+        int(item["timestamp"])
+        for item in points
+        if type(item.get("timestamp")) is int
+    ]
+    if not timestamps:
+        return points
+    end = max(timestamps)
+    coverage = end - min(timestamps)
+    selected = str(range_id or "30d").lower()
+
+    # The frozen provider transport can expose only ~5.2 days (500 x 15m).
+    # Without this bounded fallback, both 7D and 30D resolve to the identical
+    # full array and the public selector appears broken. Preserve exact
+    # timestamp filtering whenever coverage is sufficient; otherwise retain a
+    # proportional trailing window of the available provider history.
+    if coverage < seconds and selected in {"7d", "30d"}:
+        fraction = 7 / 30 if selected == "7d" else 1.0
+        count = max(1, min(len(points), round(len(points) * fraction)))
+        return points[-count:]
+
+    start = end - seconds
+    filtered = [
+        item for item in points
+        if type(item.get("timestamp")) is int and int(item["timestamp"]) >= start
+    ]
+    return filtered or points[-1:]
 
 
 def _analysis_block(contract: dict[str, Any], indicator_id: str) -> dict[str, Any]:
@@ -1673,12 +1599,12 @@ def _analysis_block(contract: dict[str, Any], indicator_id: str) -> dict[str, An
     return _safe_dict(_safe_dict(root.get("indicators")).get(indicator_id))
 
 
-def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 220) -> go.Figure:
+def _analysis_figure(contract: dict[str, Any], indicator_id: str, range_id: str | None = None, height: int = 220) -> go.Figure:
     block = _analysis_block(contract, indicator_id)
-    points = [
+    points = _analysis_points_for_range([
         item for item in _safe_list(block.get("points"))
         if isinstance(item, dict) and item.get("timestamp") is not None
-    ]
+    ], range_id)
     fig = go.Figure()
     color_cycle = [CYAN, GREEN, RED, YELLOW, PURPLE, ORANGE, BLUE]
 
@@ -1733,7 +1659,7 @@ def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 
         hovermode="x unified",
         legend={"orientation": "h", "x": 0, "y": 1.02, "font": {"size": 7, "color": MUTED}},
         showlegend=True,
-        uirevision=f"liq-analysis-{indicator_id}",
+        uirevision=f"liq-analysis-{indicator_id}-{block.get('selected_range', '1d')}",
     )
     secondary = {"crowding_liquidation_pressure": {"crowding_liquidation_score"}}
     for trace, spec_raw in zip(fig.data, _safe_list(block.get("series"))):
@@ -1746,38 +1672,69 @@ def _analysis_figure(contract: dict[str, Any], indicator_id: str, height: int = 
 
 
 def _validated_selection(selection: Any) -> list[str]:
-    raw = selection if isinstance(selection, list) else []
-    selected = [iid for iid in ANALYSIS_ORDER if iid in raw]
-    return selected or list(ANALYSIS_ORDER)
+    if not isinstance(selection, list):
+        return list(ANALYSIS_ORDER)
+    return [iid for iid in ANALYSIS_ORDER if iid in selection]
 
 
-def _analysis_selector_panel() -> html.Div:
+def _analysis_selector_panel(*, analysis: bool = False, selection: Any = None) -> html.Div:
     options = [{"label": ANALYSIS_LABELS[iid], "value": iid} for iid in ANALYSIS_ORDER]
+    if not analysis:
+        return html.Div(
+            className="liq-selector-panel",
+            children=[dcc.Link("LIQUIDATIONS ANALYSIS ↗", href=localized_href(f"{ROUTE}/analysis"), className="liq-selector-link")],
+        )
     return html.Div(
-        className="liq-selector-panel",
+        className="screen-b-selector liq-selector-panel",
         children=[
-            dcc.Link("LIQUIDATIONS ANALYSIS ↗", href=localized_href(f"{ROUTE}/analysis"), className="liq-selector-link"),
-            html.Div("LIQUIDATIONS & POSITIONING · SCREEN B", className="liq-selector-title"),
+            html.Div("INDICATORS · SCREEN B", className="screen-b-selector-title liq-selector-title"),
             html.Div("Select native analysis panels.", className="liq-selector-note"),
             dcc.Checklist(
                 id="liquidations-analysis-selector",
                 options=options,
-                value=list(ANALYSIS_ORDER),
+                value=_validated_selection(selection),
                 className="liq-selector-check",
                 persistence="liquidations-analysis-selection-v1",
-                persistence_type="session",
+                persistence_type="local",
             ),
         ],
     )
 
 
-def _analysis_screen(contract: dict[str, Any], selection: Any) -> html.Div:
+def _analysis_range_context(contract: dict[str, Any], range_id: str | None) -> str:
+    """Describe requested versus actually available Screen-B history."""
+    selected = str(range_id or "30d").lower()
+    requested_seconds = ANALYSIS_RANGE_SECONDS.get(selected)
+    timestamps: list[int] = []
+    root = _safe_dict(contract.get("liquidation_analysis"))
+    indicators = _safe_dict(root.get("indicators"))
+    for indicator_id in ANALYSIS_ORDER:
+        block = _safe_dict(indicators.get(indicator_id))
+        for item in _safe_list(block.get("points")):
+            if isinstance(item, dict) and type(item.get("timestamp")) is int:
+                timestamps.append(int(item["timestamp"]))
+        if timestamps:
+            break
+    if not timestamps or requested_seconds is None:
+        return f"RANGE {selected.upper()}"
+    available_seconds = max(timestamps) - min(timestamps)
+    available_days = max(0.0, available_seconds / 86_400.0)
+    requested_days = requested_seconds / 86_400.0
+    if available_seconds + 900 < requested_seconds:
+        return (
+            f"RANGE {selected.upper()} · AVAILABLE HISTORY {available_days:.1f}D "
+            f"(fixed 500-record 15m source window; normalized trailing view for requested {requested_days:g}D)"
+        )
+    return f"RANGE {selected.upper()} · FULL WINDOW AVAILABLE"
+
+
+def _analysis_screen(contract: dict[str, Any], selection: Any, range_id: str | None = None) -> html.Div:
     selected = _validated_selection(selection)
     cards: list[Any] = []
     for indicator_id in selected:
         cards.append(
             html.Div(
-                className="liq-analysis-card",
+                className="screen-b-card liq-analysis-card",
                 children=[
                     html.Div(
                         contextual_help_label(
@@ -1786,12 +1743,14 @@ def _analysis_screen(contract: dict[str, Any], selection: Any) -> html.Div:
                             section="screen_b",
                             key=indicator_id,
                         ),
-                        className="liq-analysis-card-title",
+                        className="screen-b-card-title liq-analysis-card-title",
                     ),
                     dcc.Graph(
-                        figure=_analysis_figure(contract, indicator_id, height=220),
-                        config={"displaylogo": False, "responsive": True, "scrollZoom": False},
-                        style={"height": "220px", "minHeight": "220px", "width": "100%"},
+                        figure=_analysis_figure(contract, indicator_id, range_id=range_id, height=220),
+                        config={"displaylogo": False, "responsive": False, "scrollZoom": False},
+                        animate=False,
+                        className="screen-b-graph",
+                        style={"height": "220px", "minHeight": "220px", "maxHeight": "220px", "width": "100%"},
                     ),
                 ],
             )
@@ -1804,14 +1763,10 @@ def _analysis_screen(contract: dict[str, Any], selection: Any) -> html.Div:
                 dcc.Link("← BACK", href=localized_href(ROUTE), className="liq-analysis-link"),
             ]),
             html.Div(
-                "Native Screen B: realized liquidations, cascades, crowding and regime. Long/Short Ratio is positioning; it is not interpreted as a realized liquidation.",
-                className="liq-analysis-subtitle",
-            ),
-            html.Div(
-                className="liq-analysis-layout",
+                className="screen-b-layout liq-analysis-layout",
                 children=[
-                    html.Div(cards, className="liq-analysis-grid"),
-                    _side_panel(contract),
+                    html.Div(cards, className="screen-b-grid liq-analysis-grid"),
+                    html.Div([_analysis_selector_panel(analysis=True, selection=selected), _side_panel(contract)]),
                 ],
             ),
         ],
@@ -1830,16 +1785,22 @@ def persist_analysis_selection(selection: list[str] | None) -> list[str]:
 @callback(
     Output(ANALYSIS_CONTENT_ID, "children"),
     Input(SELECTION_STORE_ID, "data"),
+    Input("range-selector", "value", allow_optional=True),
     Input("reload-json", "n_clicks"),
     Input("url", "search"),
     prevent_initial_call=False,
 )
-def update_analysis_content(selection: Any, _reload: int | None, search: str | None) -> html.Div:
+def update_analysis_content(
+    selection: Any,
+    range_id: str | None,
+    _reload: int | None,
+    search: str | None,
+) -> html.Div:
     from screen_core.contract_loader import load_contract
 
     locale = locale_from_search(search)
     with locale_context(locale):
-        rendered = _analysis_screen(load_contract(CONTRACT_FILE), selection)
+        rendered = _analysis_screen(load_contract(CONTRACT_FILE), selection, range_id)
         return localize_component_tree(rendered, locale)
 
 
@@ -1850,13 +1811,16 @@ def render(
     timeframe: str | None,
     range_id: str | None,
 ) -> html.Div:
-    del market, timeframe, range_id
+    del market, timeframe
 
     if view == "analysis":
         return screen_page(
             _stylesheet(),
-            dcc.Store(id=SELECTION_STORE_ID, storage_type="session", data=list(ANALYSIS_ORDER)),
-            html.Div(id=ANALYSIS_CONTENT_ID, children=_analysis_screen(contract, list(ANALYSIS_ORDER))),
+            dcc.Store(id=SELECTION_STORE_ID, storage_type="local"),
+            html.Div(
+                id=ANALYSIS_CONTENT_ID,
+                children=_analysis_screen(contract, list(ANALYSIS_ORDER), range_id),
+            ),
         )
 
     if view == "reference":
@@ -1871,35 +1835,25 @@ def render(
         className="liq-screen-a-grid",
         children=[
             _map_card(
-                contract,
-                charts.get("aggregate_map"),
-                map_kind="aggregate",
-                graph_id="aggregate-liquidation-map",
-                height=270,
-            ),
-            _positioning_card(contract, height=270),
-            _map_card(
-                contract,
-                charts.get("hyperliquid_map"),
-                map_kind="hyperliquid",
-                graph_id="hyperliquid-map",
-                height=270,
+                contract, charts.get("hyperliquid_map"), map_kind="hyperliquid",
+                graph_id="hyperliquid-liquidation-map", height=220, range_id=range_id,
             ),
             _map_card(
-                contract,
-                charts.get("binance_leverage_map"),
-                map_kind="binance",
-                graph_id="binance-leverage-map",
-                height=270,
+                contract, charts.get("exchange_maps"), map_kind="aggregate",
+                graph_id="exchange-liquidation-maps", height=220, range_id=range_id,
             ),
+            _map_card(
+                contract, charts.get("binance_map"), map_kind="binance",
+                graph_id="binance-liquidation-map", height=220, range_id=range_id,
+            ),
+            _positioning_card(contract, height=220),
         ],
     )
 
     return screen_page(
         _stylesheet(),
-        dcc.Store(id=SELECTION_STORE_ID, storage_type="session", data=list(ANALYSIS_ORDER)),
+        dcc.Store(id=SELECTION_STORE_ID, storage_type="local"),
         screen_header(contract),
-        html.Div(className="liq-screen-a-layout", children=[map_grid, _analysis_selector_panel()]),
+        html.Div(className="liq-screen-a-layout", style={"gridTemplateColumns": "minmax(0,1fr)"}, children=[map_grid]),
         html.Div(id=ANALYSIS_CONTENT_ID, style={"display": "none"}),
     )
-

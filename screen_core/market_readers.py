@@ -216,52 +216,13 @@ def extract_flow_snapshot(chart: dict[str, Any] | None, timeframe: str | None = 
     )
 
 
-POSITIONING_VARIANTS: dict[str, dict[str, tuple[str, ...]]] = {
-    "top_position": {
-        "long": (
-            "long_share_top_position",
-            "top_position_long_share",
-            "top_position_long_pct",
-            "top_position_long_percent",
-        ),
-        "short": (
-            "short_share_top_position",
-            "top_position_short_share",
-            "top_position_short_pct",
-            "top_position_short_percent",
-        ),
-        "ratio": ("top_position_ratio", "top_position_long_short_ratio"),
-    },
-    "top_account": {
-        "long": (
-            "long_share_top_account",
-            "top_account_long_share",
-            "top_account_long_pct",
-            "top_account_long_percent",
-        ),
-        "short": (
-            "short_share_top_account",
-            "top_account_short_share",
-            "top_account_short_pct",
-            "top_account_short_percent",
-        ),
-        "ratio": ("top_account_ratio", "top_account_long_short_ratio"),
-    },
-    "global_account": {
-        "long": (
-            "long_share_global_account",
-            "global_account_long_share",
-            "global_account_long_pct",
-            "global_account_long_percent",
-        ),
-        "short": (
-            "short_share_global_account",
-            "global_account_short_share",
-            "global_account_short_pct",
-            "global_account_short_percent",
-        ),
-        "ratio": ("global_account_ratio", "global_account_long_short_ratio"),
-    },
+
+POSITIONING_EXPECTED_TIMEFRAMES = ("1m", "5m", "15m", "4h")
+
+POSITIONING_FIELDS: dict[str, tuple[str, ...]] = {
+    "long": ("long_share", "long_percent"),
+    "short": ("short_share", "short_percent"),
+    "ratio": ("long_short_ratio",),
 }
 
 
@@ -271,7 +232,6 @@ class PositioningSnapshot:
     long_percent: float | None
     short_percent: float | None
     ratio: float | None
-    variant: str
     exchange: str | None
     timeframe: str | None
     history: tuple[tuple[Any, float], ...]
@@ -327,13 +287,12 @@ def _select_positioning_timeframe(block: dict[str, Any], timeframe: str | None) 
 def extract_positioning_snapshot(
     contract: dict[str, Any],
     *,
-    variant: str = "top_position",
     exchange: str | None = None,
     timeframe: str | None = None,
 ) -> PositioningSnapshot:
     chart = _dict(_dict(contract.get("charts")).get("long_short_positioning"))
     if not chart:
-        return PositioningSnapshot("unavailable", None, None, None, variant, exchange, timeframe, (), "positioning_chart_missing")
+        return PositioningSnapshot("unavailable", None, None, None, exchange, timeframe, (), "positioning_chart_missing")
 
     selected_exchange = exchange
     if selected_exchange is None:
@@ -342,13 +301,13 @@ def extract_positioning_snapshot(
 
     exchange_block, had_exchange_map = _select_exchange_block(chart, selected_exchange)
     if not exchange_block:
-        return PositioningSnapshot("unavailable", None, None, None, variant, selected_exchange, timeframe, (), "exchange_not_published")
+        return PositioningSnapshot("unavailable", None, None, None, selected_exchange, timeframe, (), "exchange_not_published")
 
     tf_block, selected_tf, had_tf_map = _select_positioning_timeframe(exchange_block, timeframe)
     if timeframe and not tf_block:
-        return PositioningSnapshot("unavailable", None, None, None, variant, selected_exchange, selected_tf, (), "timeframe_not_published")
+        return PositioningSnapshot("unavailable", None, None, None, selected_exchange, selected_tf, (), "timeframe_not_published")
 
-    specs = POSITIONING_VARIANTS.get(variant, POSITIONING_VARIANTS["top_position"])
+    specs = POSITIONING_FIELDS
     current = _current_record(tf_block, exchange_block)
 
     long_raw, long_field = _first_scalar(current, specs["long"])
@@ -401,7 +360,6 @@ def extract_positioning_snapshot(
         long_percent=long_percent,
         short_percent=short_percent,
         ratio=float(ratio) if isinstance(ratio, (int, float)) else None,
-        variant=variant,
         exchange=selected_exchange,
         timeframe=selected_tf,
         history=tuple(history),
@@ -424,14 +382,33 @@ def selector_values(contract: dict[str, Any], selector_name: str) -> tuple[list[
 
 
 def positioning_timeframes(contract: dict[str, Any]) -> tuple[list[str], str | None]:
+    """Return selectable L/S timeframes without inventing market data.
+
+    Preference order:
+    1. Explicit selector options published by Processing.
+    2. Explicit timeframe blocks published by Processing.
+    3. The HMI's allowed selector domain for the feature.
+
+    The fallback in step 3 only keeps the control usable. Selecting one of those
+    values still yields UNAVAILABLE unless Processing publishes the matching
+    timeframe block; no ratio/share values are derived in Dash.
+    """
     values, selected = selector_values(contract, "timeframe")
     if values:
         return values, selected
+
     chart = _dict(_dict(contract.get("charts")).get("long_short_positioning"))
     for key in ("series_by_timeframe", "timeframes"):
         blocks = _dict(chart.get(key))
         if blocks:
             keys = [str(item) for item in blocks.keys()]
-            current = str(chart.get("selected_timeframe") or keys[0])
+            current = str(chart.get("selected_timeframe") or "") or None
+            if current not in keys:
+                current = None
             return keys, current
-    return [], None
+
+    # Selector vocabulary is presentation metadata, not a market calculation.
+    # Do not choose a synthetic/default timeframe when the contract does not
+    # publish one; the user may select a value and the chart will correctly
+    # remain UNAVAILABLE until Processing supplies that timeframe.
+    return list(POSITIONING_EXPECTED_TIMEFRAMES), None

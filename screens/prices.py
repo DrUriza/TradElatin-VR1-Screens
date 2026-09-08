@@ -5,20 +5,20 @@ from typing import Any, Iterable
 from urllib.parse import quote
 
 import plotly.graph_objects as go
-from dash import Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import Input, Output, State, callback, dcc, html
 from plotly.subplots import make_subplots
 
+from screen_core.selection_state import (
+    LOCAL_SELECTION_PERSISTENCE_TYPE,
+    resolve_persisted_selection,
+)
 from screen_core.components import (
-    analysis_grid,
-    contract_warning,
-    nested_table_sections,
     reference_gallery,
     screen_header,
     screen_page,
-    two_column,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, locale_label, localize_component_tree, localize_figure, localized_href, locale_from_search
+from screen_core.i18n import locale_context, locale_label, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
@@ -39,12 +39,16 @@ REFERENCE_IMAGES = [
 PRICE_KPI_SPEC = (
     ("last_price", "CURRENT PRICE", "default"),
     ("change_24h", "CHANGE 24H", "change"),
+    ("change_15m", "CHANGE 15M", "change"),
+    ("change_4h", "CHANGE 4H", "change"),
     ("high_24h", "HIGH 24H", "default"),
     ("low_24h", "LOW 24H", "default"),
     ("volume_24h", "VOLUME 24H", "default"),
+    ("relative_volume_20", "RELATIVE VOLUME", "default"),
+    ("volume_zscore_20", "VOLUME Z-SCORE", "default"),
     ("market_cap", "MARKET CAP", "default"),
     ("volatility_atr_percent", "VOLATILITY (ATR %)", "default"),
-    ("average_range", "AVERAGE RANGE (24H)", "default"),
+    ("range_percent", "CANDLE RANGE %", "default"),
 )
 
 
@@ -91,6 +95,8 @@ VOLUME_OPTIONS = [
     {"label": "Volume", "value": "volume"},
     {"label": "MFI (14)", "value": "mfi"},
 ]
+SCREEN_A_VOLUME_OPTIONS = [item for item in VOLUME_OPTIONS if item["value"] == "volume"]
+SCREEN_B_FLOW_OPTIONS = [item for item in VOLUME_OPTIONS if item["value"] == "mfi"]
 
 DEFAULT_TREND = ["ema_9", "ema_21", "sma_20", "sma_50", "wma_20", "wma_50"]
 DEFAULT_BANDS = ["bollinger_bands", "fibonacci_levels", "support", "resistance"]
@@ -370,7 +376,7 @@ PRICES_LOCAL_CSS = """
 
 .prices-analysis-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 314px;
+    grid-template-columns: minmax(0, 1fr) 286px;
     gap: 8px;
     align-items: start;
 }
@@ -384,7 +390,9 @@ PRICES_LOCAL_CSS = """
 
 .prices-analysis-card {
     min-width: 0;
-    min-height: 180px;
+    height: 247px;
+    min-height: 247px;
+    max-height: 247px;
     border: 1px solid #123247;
     border-radius: 4px;
     background: linear-gradient(180deg, #061522 0%, #04111c 100%);
@@ -422,12 +430,24 @@ PRICES_LOCAL_CSS = """
 .prices-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 310px;
+    min-height: 220px;
 }
 
 .prices-analysis-card-graph {
     min-width: 0;
-    height: 310px;
+    width: 100%;
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
+    overflow: hidden;
+}
+
+.prices-analysis-card-graph .js-plotly-plot,
+.prices-analysis-card-graph .plot-container,
+.prices-analysis-card-graph .svg-container {
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
 }
 
 .prices-analysis-card-values {
@@ -485,6 +505,33 @@ PRICES_LOCAL_CSS = """
 .prices-summary-column {
     display: grid;
     gap: 7px;
+}
+
+.prices-analysis-controls {
+    border: 1px solid #173247;
+    border-radius: 4px;
+    background: #06111d;
+    overflow: hidden;
+    align-self: start;
+}
+.prices-analysis-controls .prices-indicator-group {
+    border-top: 1px solid #173247;
+    padding: 8px 9px;
+    margin: 0;
+}
+.prices-analysis-controls .prices-indicator-group-title {
+    color: #718da3;
+    font-size: 8px;
+    margin-bottom: 6px;
+}
+.prices-analysis-controls .prices-options-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+.prices-analysis-controls .prices-options-grid label {
+    color: #d9e8f5;
+    font-size: 9px;
+    min-height: 20px;
 }
 
 .prices-summary-panel,
@@ -679,9 +726,9 @@ PRICES_LOCAL_CSS = """
 
 KPI_STRIP_STYLE = {
     "display": "grid",
-    "gridTemplateColumns": "repeat(8, minmax(100px, 1fr))",
+    "gridTemplateColumns": "repeat(12, minmax(92px, 1fr))",
     "width": "100%",
-    "minWidth": "800px",
+    "minWidth": "1104px",
     "background": "#06111d",
     "borderTop": "1px solid #102536",
     "borderBottom": "1px solid #102536",
@@ -900,7 +947,7 @@ def _price_kpi_strip(contract: dict[str, Any]) -> html.Div:
                         style={**KPI_LABEL_STYLE, "color": _label_color(tone)},
                     ),
                     html.Div(
-                        _format_value(metric, signed=metric_id == "change_24h"),
+                        _format_value(metric, signed=metric_id in {"change_24h", "change_15m", "change_4h"}),
                         style={**KPI_VALUE_STYLE, "color": value_color},
                     ),
                     html.Div(_unit_label(metric.get("unit")), style=KPI_UNIT_STYLE),
@@ -930,7 +977,7 @@ def _checklist(component_id: str, options: list[dict[str, str]], values: list[st
         value=values,
         className="prices-options-grid",
         persistence="prices-controls-v2",
-        persistence_type="memory",
+        persistence_type=LOCAL_SELECTION_PERSISTENCE_TYPE,
     )
 
 
@@ -1007,14 +1054,6 @@ def _indicator_panel() -> html.Div:
                             "textDecoration": "none",
                         },
                     ),
-                    # Legacy callback target kept hidden during migration.
-                    html.Button(
-                        "",
-                        id="prices-open-analysis",
-                        n_clicks=0,
-                        type="button",
-                        style={"display": "none"},
-                    ),
                 ],
             ),
             html.Div(
@@ -1039,24 +1078,35 @@ def _indicator_panel() -> html.Div:
                 "BANDS, LEVELS & CHANNELS · ON PRICE",
                 _checklist("prices-band-selectors", BAND_OPTIONS, DEFAULT_BANDS),
             ),
-            _analysis_only_selector_group(
-                _checklist(
-                    "prices-derived-selectors",
-                    DERIVED_ANALYSIS_OPTIONS,
-                    DEFAULT_DERIVED_ANALYSIS,
-                )
-            ),
-            _selector_group(
-                "MOMENTUM · SCREEN B",
-                _checklist("prices-momentum-selectors", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
-            ),
-            _selector_group(
-                "VOLATILITY · SCREEN B",
-                _checklist("prices-volatility-selectors", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
-            ),
             _selector_group(
                 "VOLUME",
-                _checklist("prices-volume-selectors", VOLUME_OPTIONS, DEFAULT_VOLUME),
+                _checklist("prices-volume-selectors", SCREEN_A_VOLUME_OPTIONS, DEFAULT_VOLUME),
+            ),
+        ],
+    )
+
+
+def _analysis_indicator_controls(selection: Any) -> html.Div:
+    payload = resolve_persisted_selection(selection, _default_selection_payload)
+    return html.Div(
+        className="screen-b-selector prices-analysis-controls",
+        children=[
+            html.Div("INDICATORS · SCREEN B", className="screen-b-selector-title prices-summary-title"),
+            _selector_group(
+                "DERIVED ANALYSIS",
+                _checklist("prices-derived-selectors", DERIVED_ANALYSIS_OPTIONS, list(payload.get("derived_analysis", []))),
+            ),
+            _selector_group(
+                "MOMENTUM",
+                _checklist("prices-momentum-selectors", MOMENTUM_OPTIONS, list(payload.get("momentum", []))),
+            ),
+            _selector_group(
+                "VOLATILITY",
+                _checklist("prices-volatility-selectors", VOLATILITY_OPTIONS, list(payload.get("volatility", []))),
+            ),
+            _selector_group(
+                "VOLUME FLOW",
+                _checklist("prices-flow-selectors", SCREEN_B_FLOW_OPTIONS, [item for item in payload.get("volume", []) if item == "mfi"]),
             ),
         ],
     )
@@ -1076,7 +1126,7 @@ def _selected_ohlcv(
     ohlcv = _safe_dict(charts.get("ohlcv"))
 
     selected_market = market or str(ohlcv.get("selected_market") or "general")
-    selected_timeframe = timeframe or str(ohlcv.get("selected_timeframe") or "1h")
+    selected_timeframe = timeframe or str(ohlcv.get("selected_timeframe") or "15m")
 
     markets = _safe_dict(ohlcv.get("markets"))
     market_block = _safe_dict(markets.get(selected_market))
@@ -1089,7 +1139,7 @@ def _selected_ohlcv(
     timeframe_block = _safe_dict(timeframes.get(selected_timeframe))
 
     if not timeframe_block:
-        selected_timeframe = str(ohlcv.get("selected_timeframe") or next(iter(timeframes), "1h"))
+        selected_timeframe = str(ohlcv.get("selected_timeframe") or next(iter(timeframes), "15m"))
         timeframe_block = _safe_dict(timeframes.get(selected_timeframe))
 
     return timeframe_block, selected_market, selected_timeframe
@@ -1799,31 +1849,39 @@ def _indicator_series(
     return timestamps, normalized
 
 
-def _add_reference_lines(fig: go.Figure, indicator_id: str, row: int) -> None:
+def _add_reference_lines(
+    fig: go.Figure,
+    indicator_id: str,
+    row: int,
+    contract: dict[str, Any] | None = None,
+    market: str | None = None,
+    timeframe: str | None = None,
+) -> None:
     levels: tuple[tuple[float, str], ...] = ()
-
-    if indicator_id in {"rsi", "mfi"}:
-        levels = ((70, "70"), (30, "30")) if indicator_id == "rsi" else ((80, "80"), (20, "20"))
+    # RSI/TSI levels are produced by Processing from their observed ranges.
+    # HMI only renders contract values.
+    if indicator_id in {"rsi", "tsi"} and contract is not None and market and timeframe:
+        block = _standard_indicator_block(contract, indicator_id, market, timeframe)
+        dynamic = []
+        for item in _safe_list(block.get("reference_lines")):
+            try:
+                dynamic.append((float(item.get("value")), str(item.get("label") or item.get("role") or "")))
+            except (TypeError, ValueError):
+                continue
+        levels = tuple(dynamic)
+    elif indicator_id == "mfi":
+        levels = ((80, "80"), (20, "20"))
     elif indicator_id == "stochastic":
         levels = ((80, "80"), (20, "20"))
-    elif indicator_id == "tsi":
-        levels = ((25, "+25"), (0, "0"), (-25, "-25"))
     elif indicator_id == "williams_r":
         levels = ((-20, "-20"), (-80, "-80"))
 
     for value, label in levels:
         fig.add_hline(
-            y=value,
-            row=row,
-            col=1,
-            line_color="rgba(140,155,168,0.45)",
-            line_dash="dot",
-            line_width=1,
-            annotation_text=label,
-            annotation_font={"size": 8, "color": "#7f91a0"},
-            annotation_position="right",
+            y=value, row=row, col=1,
+            line_color="rgba(140,155,168,0.45)", line_dash="dot", line_width=1,
+            annotation_text=label, annotation_font={"size": 8, "color": "#7f91a0"}, annotation_position="right",
         )
-
 
 def _add_oscillator(
     fig: go.Figure,
@@ -1881,7 +1939,7 @@ def _add_oscillator(
                 col=1,
             )
 
-    _add_reference_lines(fig, indicator_id, row)
+    _add_reference_lines(fig, indicator_id, row, contract, market, timeframe)
 
     # Oscillator reference lines are anchored to the full indicator domain,
     # never to the last scalar value or to the sum of the visible series.
@@ -1951,7 +2009,8 @@ def build_price_figure(
 
     subplot_titles = [""]
     if show_volume:
-        subplot_titles.append("BUY / SELL VOLUME")
+        volume_title = "BUY / SELL VOLUME" if _has_buy_sell_volume(records) else "VOLUME"
+        subplot_titles.append(volume_title)
     subplot_titles.extend(INDICATOR_TITLES[indicator_id] for indicator_id in oscillators)
 
     fig = make_subplots(
@@ -2120,7 +2179,19 @@ def build_price_figure(
                             for record in records
                         ],
                         name="VOLUME",
-                        marker_color="rgba(127,145,160,0.72)",
+                        # Prices 1m has canonical OHLCV volume but no true
+                        # taker buy/sell split after CVD 1m was removed. Color
+                        # the observed volume by candle direction instead of
+                        # fabricating buy/sell quantities: green for close >=
+                        # open, red for close < open.
+                        marker_color=[
+                            "rgba(0,199,140,0.82)"
+                            if isinstance(record.get("open"), (int, float))
+                            and isinstance(record.get("close"), (int, float))
+                            and float(record.get("close")) >= float(record.get("open"))
+                            else "rgba(255,77,109,0.82)"
+                            for record in records
+                        ],
                         showlegend=False,
                         hovertemplate=(
                             "VOLUME: %{y:,.2f}"
@@ -2221,6 +2292,7 @@ def build_price_figure(
 
 SELECTION_STORE_ID = "prices-selection-store"
 ANALYSIS_CONTENT_ID = "prices-analysis-content"
+KPI_CONTENT_ID = "prices-kpi-content"
 
 ANALYSIS_GRAPH_ORDER = (
     "macd",
@@ -2327,14 +2399,14 @@ def _default_selection_payload() -> dict[str, list[str]]:
 def _direct_analysis_default_payload() -> dict[str, list[str]]:
     """Canonical fresh-session Screen B selection.
 
-    Screen A defaults stay unchanged. A direct /prices/analysis route must still
-    expose the six frozen primary Price analyses instead of an empty panel.
+    Screen A defaults stay unchanged. A fresh Screen B exposes every native
+    Price analysis; users can then hide individual cards with its selector.
     """
     payload = _default_selection_payload()
-    payload["derived_analysis"] = ["adx"]
-    payload["momentum"] = ["macd", "rsi", "tsi", "stochastic", "williams_r"]
-    payload["volatility"] = []
-    payload["volume"] = []
+    payload["derived_analysis"] = [item["value"] for item in DERIVED_ANALYSIS_OPTIONS]
+    payload["momentum"] = [item["value"] for item in MOMENTUM_OPTIONS]
+    payload["volatility"] = [item["value"] for item in VOLATILITY_OPTIONS]
+    payload["volume"] = ["mfi"]
     return payload
 
 
@@ -2574,6 +2646,15 @@ def _signal_descriptor(row: dict[str, Any], panel: dict[str, Any], indicator_id:
     signal = str(row.get("signal") or "").lower()
     state = str(row.get("state") or row.get("display_signal") or "").lower()
 
+    if indicator_id in {"rsi", "tsi"}:
+        adaptive = {
+            "oversold": ("OVERSOLD", "#00e59b"),
+            "normal_bullish": ("NORMAL BULLISH", "#20d05c"),
+            "normal_bearish": ("NORMAL BEARISH", "#ff7b55"),
+            "overbought": ("OVERBOUGHT", "#ffab00"),
+        }
+        if state in adaptive:
+            return adaptive[state]
     if indicator_id == "adx" and state in {"strong", "very_strong", "developing"}:
         return "TREND", "#20d05c"
     if signal in {"bullish", "positive", "buy", "buying"}:
@@ -2777,6 +2858,7 @@ def _analysis_figure(
                 go.Bar(
                     x=current_x,
                     y=current_y,
+                    name="HISTOGRAM",
                     marker_color=[
                         "#22c868" if value is not None and value >= 0 else "#ff4c43"
                         for value in current_y
@@ -2794,6 +2876,7 @@ def _analysis_figure(
                 x=current_x,
                 y=current_y,
                 mode="lines",
+                name=SERIES_LABELS.get(series_name, series_name.replace("_", " ").upper()),
                 line={
                     "color": ANALYSIS_LINE_COLORS.get(color_key, "#22c7e8"),
                     "width": 1.25,
@@ -2862,7 +2945,13 @@ def _analysis_figure(
     fig.update_xaxes(
         showgrid=False,
         zeroline=False,
-        showticklabels=False,
+        showticklabels=True,
+        tickformat="%H:%M<br>%d/%m",
+        tickfont={"size": 7, "color": "#83949f"},
+        nticks=5,
+        ticks="outside",
+        ticklen=3,
+        title={"text": "UTC", "font": {"size": 7, "color": "#718593"}, "standoff": 2},
         linecolor="#173247",
         fixedrange=True,
         **(
@@ -2888,7 +2977,7 @@ def _analysis_figure(
     for trace in fig.data:
         if trace.name and trace.type in {"scatter", "bar"}:
             trace.showlegend = True
-    return apply_analysis_figure_layout(fig)
+    return apply_analysis_figure_layout(fig, height=220)
 
 
 def _analysis_value_rows(
@@ -2971,10 +3060,10 @@ def _analysis_card(
     title = INDICATOR_TITLES.get(indicator_id, indicator_id.upper())
 
     return html.Div(
-        className="prices-analysis-card",
+        className="screen-b-card prices-analysis-card",
         children=[
             html.Div(
-                className="prices-analysis-card-header",
+                className="screen-b-card-title prices-analysis-card-header",
                 children=[
                     contextual_help_label(
                         f"{number}. {title}",
@@ -2984,25 +3073,12 @@ def _analysis_card(
                     ),
                 ],
             ),
-            html.Div(
-                className="prices-analysis-card-body",
-                children=[
-                    dcc.Graph(
-                        figure=_analysis_figure(
-                            contract,
-                            indicator_id,
-                            panel,
-                            market,
-                            timeframe,
-                        ),
-                        config={"displayModeBar": False, "displaylogo": False, "responsive": True},
-                        className="prices-analysis-card-graph",
-                    ),
-                    html.Div(
-                        _analysis_value_rows(indicator_id, panel, row),
-                        className="prices-analysis-card-values",
-                    ),
-                ],
+            dcc.Graph(
+                figure=_analysis_figure(contract, indicator_id, panel, market, timeframe),
+                config={"displayModeBar": False, "displaylogo": False, "responsive": False},
+                animate=False,
+                className="screen-b-graph prices-analysis-card-graph",
+                style={"height": "220px", "minHeight": "220px", "maxHeight": "220px", "width": "100%"},
             ),
         ],
     )
@@ -3124,7 +3200,7 @@ def build_analysis_screen(
 
     if selected_ids:
         chart_area: Any = html.Div(
-            className="prices-analysis-grid",
+            className="screen-b-grid prices-analysis-grid",
             children=[
                 _analysis_card(
                     contract,
@@ -3156,23 +3232,18 @@ def build_analysis_screen(
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
-                                html.Button(
-                                    "",
-                                    id="prices-back-analysis",
-                                    n_clicks=0,
-                                    style={"display": "none"},
-                                ),
                             ],
                         )
                 ],
             ),
             html.Div(
-                className="prices-analysis-layout",
+                className="screen-b-layout prices-analysis-layout",
                 children=[
                     chart_area,
                     html.Div(
                         className="prices-summary-column",
                         children=[
+                            _analysis_indicator_controls(selection),
                             _summary_panel(contract, selected_market, selected_timeframe),
                             _strength_legend(),
                         ],
@@ -3184,32 +3255,37 @@ def build_analysis_screen(
 
 
 
-@callback(
-    Output("screen-view", "value", allow_duplicate=True),
-    Input("prices-back-analysis", "n_clicks", allow_optional=True),
-    prevent_initial_call=True,
-)
-def return_to_prices_screen_a(clicks: int | None):
-    return "main" if clicks else no_update
-
 # -----------------------------------------------------------------------------
 # Dash callbacks
 # -----------------------------------------------------------------------------
 
 
 @callback(
+    Output(KPI_CONTENT_ID, "children"),
+    Input("reload-json", "n_clicks"),
+    Input("url", "search"),
+    prevent_initial_call=True,
+)
+def update_prices_kpis(_reload_clicks: int | None, search: str | None) -> html.Div:
+    locale = locale_from_search(search)
+    contract = load_contract(CONTRACT_FILE)
+    with locale_context(locale):
+        return localize_component_tree(_price_kpi_strip(contract), locale)
+
+
+@callback(
     Output("prices-main-graph", "figure"),
     Input("prices-trend-selectors", "value"),
     Input("prices-band-selectors", "value"),
-    Input("prices-derived-selectors", "value"),
-    Input("prices-momentum-selectors", "value"),
-    Input("prices-volatility-selectors", "value"),
+    Input("prices-derived-selectors", "value", allow_optional=True),
+    Input("prices-momentum-selectors", "value", allow_optional=True),
+    Input("prices-volatility-selectors", "value", allow_optional=True),
     Input("prices-volume-selectors", "value"),
     Input("market-selector", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
     Input("url", "search"),
-    prevent_initial_call=True,
+    prevent_initial_call=False,
 )
 def update_price_figure(
     trend_values: list[str] | None,
@@ -3248,38 +3324,38 @@ def update_price_figure(
 
 @callback(
     Output(SELECTION_STORE_ID, "data"),
-    Output("screen-view", "value", allow_duplicate=True),
-    Input("prices-trend-selectors", "value"),
-    Input("prices-band-selectors", "value"),
-    Input("prices-derived-selectors", "value"),
-    Input("prices-momentum-selectors", "value"),
-    Input("prices-volatility-selectors", "value"),
-    Input("prices-volume-selectors", "value"),
-    Input("prices-open-analysis", "n_clicks"),
+    Input("prices-trend-selectors", "value", allow_optional=True),
+    Input("prices-band-selectors", "value", allow_optional=True),
+    Input("prices-derived-selectors", "value", allow_optional=True),
+    Input("prices-momentum-selectors", "value", allow_optional=True),
+    Input("prices-volatility-selectors", "value", allow_optional=True),
+    Input("prices-volume-selectors", "value", allow_optional=True),
+    Input("prices-flow-selectors", "value", allow_optional=True),
+    State(SELECTION_STORE_ID, "data"),
     prevent_initial_call=True,
 )
-def persist_prices_selection_and_open_analysis(
+def persist_prices_selection(
     trend_values: list[str] | None,
     band_values: list[str] | None,
     derived_values: list[str] | None,
     momentum_values: list[str] | None,
     volatility_values: list[str] | None,
     volume_values: list[str] | None,
-    open_clicks: int | None,
-) -> tuple[dict[str, list[str]], Any]:
-    payload = _selection_payload(
-        trend_values,
-        band_values,
-        derived_values,
-        momentum_values,
-        volatility_values,
-        volume_values,
+    flow_values: list[str] | None,
+    current: Any,
+) -> dict[str, list[str]]:
+    stored = resolve_persisted_selection(current, _default_selection_payload)
+    stored_volume = list(stored.get("volume", []))
+    screen_a_volume = [item for item in stored_volume if item == "volume"] if volume_values is None else volume_values
+    screen_b_flow = [item for item in stored_volume if item == "mfi"] if flow_values is None else flow_values
+    return _selection_payload(
+        list(stored.get("trend", [])) if trend_values is None else trend_values,
+        list(stored.get("bands", [])) if band_values is None else band_values,
+        list(stored.get("derived_analysis", [])) if derived_values is None else derived_values,
+        list(stored.get("momentum", [])) if momentum_values is None else momentum_values,
+        list(stored.get("volatility", [])) if volatility_values is None else volatility_values,
+        [*(screen_a_volume or []), *(screen_b_flow or [])],
     )
-
-    if ctx.triggered_id == "prices-open-analysis" and open_clicks:
-        return payload, "analysis"
-
-    return payload, no_update
 
 
 @callback(
@@ -3306,7 +3382,7 @@ def update_analysis_screen(
                 contract,
                 market,
                 timeframe,
-                selection or _default_selection_payload(),
+                resolve_persisted_selection(selection, _direct_analysis_default_payload),
             ),
             locale,
         )
@@ -3380,7 +3456,7 @@ def render(
             storage_type="local",
         ),
         screen_header(contract),
-        _price_kpi_strip(contract),
+        html.Div(id=KPI_CONTENT_ID, children=_price_kpi_strip(contract)),
         html.Div(
             className="prices-main-grid",
             children=[

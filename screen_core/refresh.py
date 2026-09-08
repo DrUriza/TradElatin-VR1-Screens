@@ -2,21 +2,38 @@ from __future__ import annotations
 
 import json
 import os
-import threading
+import tempfile
 import time
 from dataclasses import dataclass
-from urllib.parse import quote
-from urllib.request import Request, urlopen
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
 
-# Fixed HMI cadence.  These values are deliberately independent of chart
-# timeframe because Processing owns the acquisition/processing schedule.
+# HMI contract-watch cadence.  Processing still owns the market-data cadence
+# (Prices=5 s, Liquidity=5 s, CVD=15 s). Prices and Liquidity are watched every
+# second so a contract written just after a UI tick is displayed promptly;
+# app.py only repaints when the contract revision actually changes.
 FAMILY_AUTO_REFRESH_MS: dict[str, int] = {
-    "prices": 5_000,
-    "cvd": 30_000,
-    "open_interest": 60_000,
+    "prices": 1_000,
+    "liquidity": 1_000,
+    "cvd": 15_000,
 }
 
 DEFAULT_REFRESH_TIMEOUT_S = 120.0
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+CANONICAL_FAMILY_NAMES = {
+    "prices": "prices_ohlcv",
+    "cvd": "cvd_volume_orderflow",
+    "open_interest": "open_interest_and_funding",
+    "etf": "etf_exchange_flows",
+    "on_chain": "on_chain_miners",
+    "volatility": "volatility_market_regimes",
+    "liquidations": "long_short_liquidations",
+    "liquidity": "liquidity_microstructure",
+}
 
 
 @dataclass(frozen=True)
@@ -27,9 +44,9 @@ class RefreshDispatch:
     endpoint: str | None
 
 
-def processing_refresh_url() -> str | None:
-    value = os.getenv("TRADELATIN_PROCESSING_REFRESH_URL", "").strip()
-    return value or None
+def processing_refresh_dir() -> Path:
+    value = os.getenv("TRADELATIN_REFRESH_DIR", "").strip() or os.getenv("TRADELATIN_PROCESSING_REFRESH_DIR", "").strip()
+    return Path(value) if value else BASE_DIR / "data" / "refresh_requests"
 
 
 def refresh_timeout_seconds() -> float:
@@ -45,44 +62,48 @@ def _trace(message: str) -> None:
         print(f"[REFRESH] {message}", flush=True)
 
 
-def _post_refresh(endpoint: str, payload: dict[str, object]) -> None:
+def _write_request(path: Path, payload: dict[str, object]) -> None:
+    """Publish JSON atomically so Processing never observes a partial file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+    )
     try:
-        body = json.dumps(payload).encode("utf-8")
-        request = Request(
-            endpoint,
-            data=body,
-            method="POST",
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
-        )
-        with urlopen(request, timeout=5.0) as response:  # noqa: S310 - configured local integration endpoint
-            _trace(f"family={payload.get('family')} HTTP {getattr(response, 'status', '?')}")
-    except Exception as exc:  # The Dash request thread must never block/fail on Processing.
-        _trace(f"family={payload.get('family')} request failed: {exc}")
+        with os.fdopen(descriptor, "w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, ensure_ascii=False, allow_nan=False, indent=2)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_name, path)
+    except Exception:
+        try:
+            os.unlink(temporary_name)
+        except OSError:
+            pass
+        raise
 
 
 def request_family_refresh_async(*, family: str, reason: str, contract_file: str) -> RefreshDispatch:
-    """Ask Processing to refresh one family without blocking Dash.
-
-    The endpoint is optional so Screens can still run standalone against static
-    JSON files.  If the URL contains ``{family}``, it is replaced with the URL
-    encoded family key.  Otherwise the family is sent in the JSON body.
-    """
-    endpoint = processing_refresh_url()
-    if not endpoint:
-        return RefreshDispatch(False, False, family, None)
-
-    final_endpoint = endpoint.replace("{family}", quote(family, safe=""))
+    """Atomically create one filesystem request for every refresh action."""
+    canonical_family = CANONICAL_FAMILY_NAMES.get(family, family)
+    request_root = processing_refresh_dir()
+    unique = f"{time.time_ns()}_{uuid4().hex}"
+    request_id = f"HMI_REFRESH_{canonical_family}_{unique}"
+    requested_at_epoch = time.time()
     payload: dict[str, object] = {
-        "family": family,
+        "schema": "tradelatin.hmi.refresh-request.v1",
+        "request_id": request_id,
+        "family": canonical_family,
         "reason": reason,
         "contract_file": contract_file,
-        "requested_at": time.time(),
+        "requested_at": datetime.now(tz=UTC).isoformat(),
+        "requested_at_epoch": requested_at_epoch,
     }
-    thread = threading.Thread(
-        target=_post_refresh,
-        args=(final_endpoint, payload),
-        name=f"tradelatin-refresh-{family}",
-        daemon=True,
-    )
-    thread.start()
-    return RefreshDispatch(True, True, family, final_endpoint)
+    destination = request_root / f"{request_id}.json"
+    try:
+        _write_request(destination, payload)
+    except OSError as exc:
+        _trace(f"family={canonical_family} request failed: {exc}")
+        return RefreshDispatch(False, False, canonical_family, str(destination))
+    _trace(f"family={canonical_family} request={destination}")
+    return RefreshDispatch(True, True, canonical_family, str(destination))

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Iterable
+from typing import Any
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -23,18 +23,21 @@ SERIES_COLORS = [CYAN, PURPLE, AMBER, GREEN, RED, BLUE, "#d178ff", "#7bdff2", "#
 
 
 def apply_analysis_figure_layout(
-    fig: go.Figure, *, height: int = 310, legend_y: float = 1.12,
-    right_margin: int = 30,
+    fig: go.Figure, *, height: int = 220, legend_y: float = 1.02,
+    right_margin: int = 18,
 ) -> go.Figure:
-    """Apply shared Screen B presentation without changing chart data."""
+    """Apply the compact Liquidations-derived Screen B visual grammar."""
     fig.update_layout(
         title=None,
         height=height,
-        margin={"l": 40, "r": right_margin, "t": 82, "b": 40},
+        margin={"l": 38, "r": right_margin, "t": 28, "b": 30},
+        paper_bgcolor=BG,
+        plot_bgcolor=PLOT_BG,
+        font={"family": "Inter, Segoe UI, sans-serif", "color": TEXT, "size": 9},
         showlegend=True,
         legend={
             "orientation": "h", "yanchor": "bottom", "y": legend_y,
-            "xanchor": "left", "x": 0, "font": {"size": 8},
+            "xanchor": "left", "x": 0, "font": {"size": 7, "color": MUTED},
             "bgcolor": "rgba(0,0,0,0)",
         },
     )
@@ -496,35 +499,3 @@ def make_chart_figure(
 
     return empty_figure(chart_title, reason or block.get("reason") if isinstance(block, dict) else reason, height)
 
-
-def gauge_figure(value: Any, title: str, minimum: float = -1.0, maximum: float = 1.0, height: int = 220) -> go.Figure:
-    try:
-        numeric = float(value)
-    except (TypeError, ValueError):
-        return empty_figure(title, "Numeric value missing", height)
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=numeric,
-        title={"text": title, "font": {"size": 11, "color": TEXT}},
-        gauge={
-            "axis": {"range": [minimum, maximum], "tickcolor": MUTED},
-            "bar": {"color": CYAN},
-            "bgcolor": PLOT_BG,
-            "bordercolor": GRID,
-            "steps": [
-                {"range": [minimum, 0], "color": "rgba(255,80,110,0.18)"},
-                {"range": [0, maximum], "color": "rgba(23,212,155,0.18)"},
-            ],
-        },
-        number={"font": {"size": 24, "color": TEXT}},
-    ))
-    return _base_layout(fig, "", height)
-
-
-def donut_figure(labels: Iterable[Any], values: Iterable[Any], title: str, height: int = 220) -> go.Figure:
-    labels_list = list(labels)
-    values_list = list(values)
-    if not labels_list or not values_list:
-        return empty_figure(title, "Values missing", height)
-    fig = go.Figure(go.Pie(labels=labels_list, values=values_list, hole=0.62, marker={"colors": SERIES_COLORS[: len(labels_list)]}, textinfo="percent"))
-    return _base_layout(fig, title, height)

@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import quote
 
 import plotly.graph_objects as go
-from dash import Input, Output, callback, ctx, dcc, html, no_update
+from dash import Input, Output, callback, dcc, html
 
 from screen_core.components import (
     data_table_card,
@@ -16,7 +16,7 @@ from screen_core.components import (
     screen_page,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, localize_component_tree, localized_href, locale_from_search
+from screen_core.i18n import locale_context, localize_component_tree, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.figures import apply_analysis_figure_layout
 
@@ -31,8 +31,6 @@ REFERENCE_IMAGES = [
     "ETF/04_ETF_Exchange_Flows_B_ExchangeBalance.png",
 ]
 
-GREEN = "#17d49b"
-RED = "#ff506e"
 BG = "#06111d"
 PLOT_BG = "#071522"
 GRID = "rgba(91,126,155,.16)"
@@ -55,44 +53,51 @@ TRACE_COLORS = {
     "wasserstein_distance": "#8a7dff",
 }
 
-ETF_RANGE_POINTS = {"30d": 30, "90d": 90, "360d": 360}
+ETF_RANGE_POINTS = {"7d": 7, "30d": 30}
 
 SELECTION_STORE_ID = "etf-technical-selection"
 ANALYSIS_CONTENT_ID = "etf-analysis-content"
 
-# Pantalla A no aplica análisis técnico clásico a ETF Flow ni Exchange Reserve.
-TREND_OPTIONS: list[dict[str, str]] = []
-BAND_OPTIONS: list[dict[str, str]] = []
+def _option_label(label: str, color: str) -> html.Span:
+    return html.Span(
+        [
+            html.Span("●", style={"color": color, "fontSize": "11px", "marginRight": "6px", "lineHeight": "1"}),
+            html.Span(label),
+        ],
+        style={"display": "inline-flex", "alignItems": "center", "gap": "0"},
+    )
 
+
+# Pantalla A no aplica análisis técnico clásico a ETF Flow ni Exchange Reserve.
 DERIVED_OPTIONS = [
     {
-        "label": "ETF Flow Momentum / Persistence",
+        "label": _option_label("ETF Flow Momentum / Persistence", "#2ea8ff"),
         "value": "etf_flow_momentum_persistence",
     },
     {
-        "label": "ETF Flow Z-Score",
+        "label": _option_label("ETF Flow Z-Score", "#2ea8ff"),
         "value": "etf_flow_zscore",
     },
 ]
 
 MOMENTUM_OPTIONS = [
     {
-        "label": "BTC Price ↔ ETF Flow Divergence",
+        "label": _option_label("BTC Price ↔ ETF Flow Divergence", "#b36bff"),
         "value": "btc_etf_flow_divergence",
     },
     {
-        "label": "Exchange Flow Pressure",
+        "label": _option_label("Exchange Flow Pressure", "#ffb000"),
         "value": "exchange_flow_pressure",
     },
     {
-        "label": "Exchange Reserve Change / Z-Score",
+        "label": _option_label("Exchange Reserve Change / Z-Score", "#ffb000"),
         "value": "exchange_reserve_change",
     },
 ]
 
 VOLATILITY_OPTIONS = [
     {
-        "label": "ETF × Exchange Capital Regime / Wasserstein",
+        "label": _option_label("ETF × Exchange Capital Regime / Wasserstein", "#20d05c"),
         "value": "capital_regime_wasserstein",
     },
 ]
@@ -140,17 +145,23 @@ LOCAL_CSS = """
 .etf-content-grid {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: 291px 291px;
+    grid-template-rows: 225px 225px;
     gap: 8px;
-    height: 590px;
+    height: 458px;
 }
 
 .etf-content-grid > * {
-    height: 291px;
-    min-height: 291px;
+    height: 225px;
+    min-height: 225px;
     overflow: hidden;
     box-sizing: border-box;
 }
+.etf-content-grid .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner td,
+.etf-content-grid .dash-table-container .dash-spreadsheet-container .dash-spreadsheet-inner th {
+    padding: 4px 5px !important;
+    font-size: 8px !important;
+}
+.etf-content-grid .panel-title { padding: 6px 8px; }
 .etf-card,
 .etf-selector,
 .etf-analysis-card {
@@ -163,8 +174,10 @@ LOCAL_CSS = """
     box-sizing: border-box;
 }
 .etf-selector {
-    height: 590px;
-    padding: 8px 10px 12px;
+    height: auto;
+    min-height: 0;
+    align-self: start;
+    padding: 8px 10px;
     overflow-y: auto;
     box-sizing: border-box;
 }
@@ -227,10 +240,27 @@ LOCAL_CSS = """
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
-    align-items: stretch;
+    align-items: start;
+    align-content: start;
 }
 .etf-analysis-card {
-    min-height: 180px;
+    height: 247px;
+    min-height: 247px;
+    max-height: 247px;
+    overflow: hidden;
+}
+.etf-analysis-card-graph {
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
+    overflow: hidden;
+}
+.etf-analysis-card-graph .js-plotly-plot,
+.etf-analysis-card-graph .plot-container,
+.etf-analysis-card-graph .svg-container {
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
 }
 
 .etf-analysis-card-title {
@@ -305,7 +335,8 @@ LOCAL_CSS = """
 }
 
 .etf-summary-panel,
-.etf-strength-legend {
+.etf-strength-legend,
+.etf-analysis-controls {
     border: 1px solid #123247;
     border-radius: 4px;
     background: linear-gradient(180deg, #061522 0%, #04111c 100%);
@@ -481,7 +512,60 @@ def _checklist(
         value=values,
         className="etf-checklist",
         persistence="etf-controls-v1",
-        persistence_type="memory",
+        persistence_type="local",
+    )
+
+
+def _analysis_selection_payload(selection: Any) -> dict[str, list[str]]:
+    payload = _default_selection()
+    if isinstance(selection, dict):
+        for key in ("derived_analysis", "momentum", "volatility"):
+            if key in selection:
+                payload[key] = _unique(_safe_list(selection.get(key)))
+    return payload
+
+
+def _analysis_indicator_controls(selection: Any) -> html.Div:
+    payload = _analysis_selection_payload(selection)
+    return html.Div(
+        className="screen-b-selector etf-analysis-controls",
+        children=[
+            html.Div("INDICATORS · SCREEN B", className="screen-b-selector-title etf-summary-title"),
+            html.Div(
+                "Select the native capital-flow panels shown on this screen.",
+                className="etf-note",
+                style={"padding": "8px 9px 0", "marginBottom": "2px"},
+            ),
+            html.Div(
+                style={"padding": "0 9px 9px"},
+                children=[
+                    _group(
+                        "INSTITUTIONAL FLOW",
+                        _checklist(
+                            "etf-derived",
+                            DERIVED_OPTIONS,
+                            list(payload.get("derived_analysis", [])),
+                        ),
+                    ),
+                    _group(
+                        "PRICE & EXCHANGE CAPITAL",
+                        _checklist(
+                            "etf-momentum",
+                            MOMENTUM_OPTIONS,
+                            list(payload.get("momentum", [])),
+                        ),
+                    ),
+                    _group(
+                        "CAPITAL REGIME",
+                        _checklist(
+                            "etf-volatility",
+                            VOLATILITY_OPTIONS,
+                            list(payload.get("volatility", [])),
+                        ),
+                    ),
+                ],
+            ),
+        ],
     )
 
 
@@ -563,40 +647,7 @@ def _selector_panel() -> html.Div:
                             "textDecoration": "none",
                         },
                     ),
-                    html.Button(
-                        "",
-                        id="etf-open-analysis",
-                        n_clicks=0,
-                        type="button",
-                        style={"display": "none"},
-                    ),
                 ],
-            ),
-            html.Div(
-                "ETF & EXCHANGE FLOWS · SCREEN B",
-                className="etf-heading",
-            ),
-            html.Div(
-                (
-                    "Native capital-flow analytics. The HMI only plots metrics precomputed by Processing; "
-                    "it does not apply RSI/MACD/ATR or moving averages to reserves or flows."
-                ),
-                className="etf-note",
-            ),
-            _group(
-                "INSTITUTIONAL FLOW · SCREEN B",
-                _checklist("etf-derived", DERIVED_OPTIONS, DEFAULT_DERIVED),
-                analysis_only=True,
-            ),
-            _group(
-                "PRICE & EXCHANGE CAPITAL · SCREEN B",
-                _checklist("etf-momentum", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
-                analysis_only=True,
-            ),
-            _group(
-                "CAPITAL REGIME · SCREEN B",
-                _checklist("etf-volatility", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
-                analysis_only=True,
             ),
         ],
     )
@@ -697,8 +748,6 @@ def _exchange_balance_figure(
                 mode="lines",
                 name="EXCHANGE RESERVE",
                 line={"color": "#2f80ff", "width": 1.65},
-                fill="tozeroy",
-                fillcolor="rgba(47,128,255,0.08)",
                 hovertemplate="Reserve: %{y:,.0f} BTC<extra></extra>",
             )
         )
@@ -709,7 +758,7 @@ def _exchange_balance_figure(
             "x": .01,
             "font": {"size": 10, "color": TEXT},
         },
-        height=291,
+        height=225,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={"l": 42, "r": 10, "t": 34, "b": 24},
@@ -719,7 +768,15 @@ def _exchange_balance_figure(
         uirevision="etf-exchange-reserve",
     )
     fig.update_xaxes(gridcolor=GRID, zeroline=False)
-    fig.update_yaxes(gridcolor=GRID, zeroline=False, tickformat=",.0f")
+    if points:
+        y_values = [float(point["value"]) for point in points]
+        y_low = min(y_values)
+        y_high = max(y_values)
+        span = y_high - y_low
+        pad = max(span * 0.10, abs((y_high + y_low) * 0.5) * 0.0025, 1.0)
+        fig.update_yaxes(gridcolor=GRID, zeroline=False, tickformat=",.0f", range=[y_low - pad, y_high + pad])
+    else:
+        fig.update_yaxes(gridcolor=GRID, zeroline=False, tickformat=",.0f")
     return fig
 
 def _indicator_figure(
@@ -796,7 +853,7 @@ def _indicator_figure(
                 )
 
     fig.update_layout(
-        height=310,
+        height=220,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={"l": 34, "r": 8, "t": 5, "b": 29},
@@ -819,7 +876,7 @@ def _indicator_figure(
         automargin=True,
     )
     fig.update_yaxes(gridcolor=GRID, zeroline=True, zerolinecolor="rgba(140,155,168,.25)")
-    return apply_analysis_figure_layout(fig)
+    return apply_analysis_figure_layout(fig, height=220)
 
 def _selected_analysis(
     selection: Any,
@@ -839,6 +896,35 @@ def _selected_analysis(
         for indicator_id in ANALYSIS_ORDER
         if indicator_id in chosen
     ]
+
+
+def _etf_signal_color(summary: dict[str, Any]) -> str:
+    raw = str(summary.get("signal_color") or "").strip().lower()
+    if raw.startswith("#") and len(raw) in {4, 7, 9}:
+        return raw
+    semantic = raw or str(summary.get("signal") or "").strip().lower()
+    if semantic in {"positive", "bullish", "buy", "buying", "expanding", "strong"}:
+        return "#20d05c"
+    if semantic in {"negative", "bearish", "sell", "selling", "contracting"}:
+        return "#ff3d55"
+    if semantic in {"neutral", "normal", "mixed", "balanced", "available", "ok"}:
+        return "#ffab00"
+    if semantic in {"unavailable", "missing", "error", "unknown", "—", ""}:
+        return "#59636b"
+    return "#22c7e8"
+
+
+def _etf_strength_count(value: Any, *, available: bool = True) -> int:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 3 if available else 0
+    if number <= 0:
+        return 1 if available else 0
+    if number <= 1.0:
+        import math
+        return max(1, min(5, int(math.ceil(number * 5.0))))
+    return max(1, min(5, int(round(number))))
 
 
 def _etf_strength_dots(count: Any, color: str) -> html.Span:
@@ -897,7 +983,11 @@ def _etf_summary_panel(
             summary = _safe_dict(indicator.get("summary"))
             if summary.get("section") != section_id:
                 continue
-            signal_color = str(summary.get("signal_color") or "#93a2ad")
+            signal_color = _etf_signal_color(summary)
+            strength_count = _etf_strength_count(
+                summary.get("strength"),
+                available=str(summary.get("signal") or "").strip().lower() not in {"", "unavailable", "—"},
+            )
             section_rows.append(
                 html.Div(
                     className="etf-summary-row",
@@ -915,7 +1005,7 @@ def _etf_summary_panel(
                             className="etf-summary-signal",
                             style={"color": signal_color},
                         ),
-                        _etf_strength_dots(summary.get("strength"), signal_color),
+                        _etf_strength_dots(strength_count, signal_color),
                     ],
                 )
             )
@@ -991,12 +1081,6 @@ def _analysis_screen(
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
-                                html.Button(
-                                    "",
-                                    id="etf-back-analysis",
-                                    n_clicks=0,
-                                    style={"display": "none"},
-                                ),
                             ],
                         )
                 ],
@@ -1016,7 +1100,7 @@ def _analysis_screen(
     for indicator_id in selected:
         cards.append(
             html.Div(
-                className="etf-analysis-card",
+                className="screen-b-card etf-analysis-card",
                 children=[
                     html.Div(
                         contextual_help_label(
@@ -1025,9 +1109,11 @@ def _analysis_screen(
                             section="screen_b",
                             key=indicator_id,
                         ),
-                        className="etf-analysis-card-title",
+                        className="screen-b-card-title etf-analysis-card-title",
                     ),
                     dcc.Graph(
+                        className="screen-b-graph etf-analysis-card-graph",
+                        animate=False,
                         figure=_indicator_figure(
                             contract,
                             indicator_id,
@@ -1035,11 +1121,12 @@ def _analysis_screen(
                         ),
                         config={
                             "displaylogo": False,
-                            "responsive": True,
+                            "responsive": False,
                         },
                         style={
-                            "height": "310px",
-                            "minHeight": "310px",
+                            "height": "220px",
+                            "minHeight": "220px",
+                            "maxHeight": "220px",
                             "width": "100%",
                         },
                     ),
@@ -1060,26 +1147,21 @@ def _analysis_screen(
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
-                                html.Button(
-                                    "",
-                                    id="etf-back-analysis",
-                                    n_clicks=0,
-                                    style={"display": "none"},
-                                ),
                             ],
                         )
                 ],
             ),
             html.Div(
-                className="etf-analysis-layout",
+                className="screen-b-layout etf-analysis-layout",
                 children=[
                     html.Div(
                         cards,
-                        className="etf-analysis-grid etf-analysis-main",
+                        className="screen-b-grid etf-analysis-grid etf-analysis-main",
                     ),
                     html.Div(
                         className="etf-summary-column",
                         children=[
+                            _analysis_indicator_controls(selection),
                             _etf_summary_panel(
                                 _safe_dict(contract.get("capital_flow_analysis")),
                                 selected,
@@ -1095,60 +1177,22 @@ def _analysis_screen(
 
 
 @callback(
-    Output("screen-view", "value", allow_duplicate=True),
-    Input("etf-back-analysis", "n_clicks", allow_optional=True),
-    prevent_initial_call=True,
-)
-def return_to_etf_screen_a(clicks: int | None):
-    return "main" if clicks else no_update
-
-
-@callback(
-    Output(
-        SELECTION_STORE_ID,
-        "data",
-    ),
-    Output(
-        "screen-view",
-        "value",
-        allow_duplicate=True,
-    ),
+    Output(SELECTION_STORE_ID, "data"),
     Input("etf-derived", "value", allow_optional=True),
     Input("etf-momentum", "value", allow_optional=True),
     Input("etf-volatility", "value", allow_optional=True),
-    Input(
-        "etf-open-analysis",
-        "n_clicks",
-        allow_optional=True,
-    ),
     prevent_initial_call=True,
 )
 def persist_selection(
     derived: list[str] | None,
     momentum: list[str] | None,
     volatility: list[str] | None,
-    open_clicks: int | None,
-):
-    payload = {
-        "derived_analysis": _unique(
-            derived or []
-        ),
-        "momentum": _unique(
-            momentum or []
-        ),
-        "volatility": _unique(
-            volatility or []
-        ),
+) -> dict[str, list[str]]:
+    return {
+        "derived_analysis": _unique(derived or []),
+        "momentum": _unique(momentum or []),
+        "volatility": _unique(volatility or []),
     }
-
-    if (
-        ctx.triggered_id
-        == "etf-open-analysis"
-        and open_clicks
-    ):
-        return payload, "analysis"
-
-    return payload, no_update
 
 
 @callback(
@@ -1181,7 +1225,7 @@ def update_analysis(
         return localize_component_tree(
             _analysis_screen(
                 contract,
-                selection or _default_selection(),
+                selection if isinstance(selection, dict) else _default_selection(),
                 range_id,
             ),
             locale,
@@ -1243,7 +1287,7 @@ def render(
                 chart_id="etf-flow-daily",
                 title="ETF Daily Net Flow",
                 range_id=range_id,
-                height=291,
+                height=225,
                 help_family="etf",
                 help_section="screen_a",
                 help_key="etf_flow_daily",
@@ -1255,7 +1299,7 @@ def render(
                 title=(
                     "ETF Flow by Provider"
                 ),
-                max_rows=10,
+                max_rows=6,
                 help_family="etf",
                 help_section="screen_a",
             ),
@@ -1269,7 +1313,7 @@ def render(
                 ),
                 title="Exchange Net Flow",
                 range_id=range_id,
-                height=291,
+                height=225,
                 help_family="etf",
                 help_section="screen_a",
                 help_key="exchange_net_flow",
@@ -1304,8 +1348,8 @@ def render(
                             "scrollZoom": True,
                         },
                         style={
-                            "height": "291px",
-                            "minHeight": "291px",
+                            "height": "225px",
+                            "minHeight": "225px",
                             "width": "100%",
                         },
                     )
@@ -1326,9 +1370,9 @@ def render(
         ),
         html.Div(
             className="etf-main-grid",
+            style={"gridTemplateColumns": "minmax(0, 1fr)"},
             children=[
                 content,
-                _selector_panel(),
             ],
         ),
         html.Div(

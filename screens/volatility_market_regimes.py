@@ -9,7 +9,7 @@ from dash import Input, Output, callback, dcc, html
 
 from screen_core.components import kpi_grid, reference_gallery, screen_header, screen_page
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, localize_component_tree, localized_href, locale_from_search
+from screen_core.i18n import locale_context, localize_component_tree, localized_href, locale_from_search
 from screen_core.figures import apply_analysis_figure_layout
 
 ROUTE = "/volatility-market-regimes"
@@ -35,7 +35,7 @@ PURPLE = "#a879ff"
 ORANGE = "#f2994a"
 CYAN = "#00c2ff"
 
-RANGE_POINTS = {"7d": 7, "30d": 30, "90d": 90, "360d": 360}
+RANGE_POINTS = {"7d": 7, "30d": 30}
 SELECTION_STORE_ID = "vol-native-selection"
 ANALYSIS_CONTENT_ID = "vol-native-analysis-content"
 
@@ -51,8 +51,9 @@ ANALYSIS_ORDER = [
 CSS = """
 .vol-native-main {display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:8px;align-items:start;}
 .vol-native-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
-.vol-native-card {border:1px solid #173247;background:#06111d;min-width:0;}
-.vol-native-panel {border:1px solid #173247;background:#06111d;padding:10px;min-height:588px;}
+.vol-native-card {border:1px solid #173247;background:#06111d;min-width:0;height:210px;min-height:210px;max-height:210px;overflow:hidden;}
+.vol-native-card .js-plotly-plot,.vol-native-card .plot-container,.vol-native-card .svg-container{height:210px !important;min-height:210px !important;max-height:210px !important;}
+.vol-native-panel {border:1px solid #173247;background:#06111d;padding:10px;min-height:0;align-self:start;}
 .vol-native-panel h3 {font-size:11px;color:#57a8ff;margin:0 0 8px;text-transform:uppercase;}
 .vol-native-section {border-top:1px solid #173247;padding-top:8px;margin-top:8px;}
 .vol-native-label {font-size:8px;color:#718da3;text-transform:uppercase;margin-bottom:5px;}
@@ -94,13 +95,21 @@ def _range_records(records: list[dict[str, Any]], range_id: str | None) -> list[
     n = RANGE_POINTS.get(str(range_id or "30d").lower(), 30)
     return records[-n:] if n > 0 else records
 
-def _base_layout(fig: go.Figure, title: str, height: int = 230) -> go.Figure:
+def _base_layout(fig: go.Figure, title: str, height: int = 210) -> go.Figure:
     fig.update_layout(
         title={"text": title, "x": .01, "font": {"size": 10, "color": TEXT}},
         height=height, paper_bgcolor=BG, plot_bgcolor=PLOT_BG,
         margin={"l": 44, "r": 16, "t": 36, "b": 28},
         font={"family":"Inter, Segoe UI, sans-serif","color":TEXT,"size":8},
-        hovermode="x unified", legend={"orientation":"h","y":1.02,"x":0,"font":{"size":8}},
+        hovermode="x unified",
+        legend={
+            "orientation": "h",
+            "x": 0,
+            "xanchor": "left",
+            "y": 1.16,
+            "yanchor": "bottom",
+            "font": {"size": 8},
+        },
         uirevision=title,
     )
     fig.update_xaxes(gridcolor=GRID, zeroline=False, tickfont={"size":8,"color":MUTED})
@@ -146,7 +155,9 @@ VOL_SCREEN_A_LABELS = {
 
 def _screen_a_card(contract: dict[str, Any], chart_id: str, range_id: str | None) -> html.Div:
     figure = _screen_a_figure(contract, chart_id, range_id)
-    figure.update_layout(title=None, margin={"l": 40, "r": 28, "t": 40, "b": 35})
+    # Keep a dedicated strip above the plotting domain for the horizontal
+    # legend.  Without this margin, labels overlap the first data points.
+    figure.update_layout(title=None, margin={"l": 40, "r": 28, "t": 58, "b": 35})
     return html.Div(
         className="vol-native-card",
         children=[
@@ -159,7 +170,7 @@ def _screen_a_card(contract: dict[str, Any], chart_id: str, range_id: str | None
                 ),
                 className="context-help-card-title context-help-card-title-compact",
             ),
-            dcc.Graph(figure=figure, config={"displaylogo":False,"responsive":True}, style={"height":"230px","minHeight":"230px","width":"100%"}),
+            dcc.Graph(figure=figure, config={"displaylogo":False,"responsive":True}, style={"height":"210px","minHeight":"210px","maxHeight":"210px","width":"100%"}),
         ],
     )
 
@@ -191,7 +202,13 @@ def _analysis_figure(block: dict[str, Any], indicator_id: str, range_id: str | N
     _base_layout(fig, None, height=220)
     return apply_analysis_figure_layout(fig, height=220, right_margin=38)
 
-def _selection_panel() -> html.Div:
+def _validated_selection(selection: Any) -> list[str]:
+    if not isinstance(selection, list):
+        return list(ANALYSIS_ORDER)
+    return [iid for iid in ANALYSIS_ORDER if iid in selection]
+
+
+def _selection_panel(*, analysis: bool = False, selection: list[str] | None = None) -> html.Div:
     groups=[
         ("VOLATILITY LEVEL · SCREEN B","vol-level-select",[{"label":"Volatility Z-Score / Percentile","value":"volatility_zscore_percentile"}]),
         ("VOLATILITY PRICING · SCREEN B","vol-pricing-select",[{"label":"Volatility Risk Premium","value":"volatility_risk_premium"}]),
@@ -199,12 +216,16 @@ def _selection_panel() -> html.Div:
         ("VOLATILITY DYNAMICS · SCREEN B","vol-dynamics-select",[{"label":"Vol-of-Vol / Acceleration","value":"vol_of_vol_acceleration"}]),
         ("REGIME · SCREEN B","vol-regime-select",[{"label":"Regime Shift / Wasserstein","value":"regime_shift_wasserstein"}]),
     ]
-    children=[dcc.Link("VOLATILITY & REGIMES ANALYSIS ↗",href=localized_href(f"{ROUTE}/analysis"),className="vol-native-link"),
-              html.H3("VOLATILITY & MARKET REGIMES · SCREEN B"),
+    if not analysis:
+        return html.Div(className="vol-native-panel", children=[
+            dcc.Link("VOLATILITY & REGIMES ANALYSIS ↗",href=localized_href(f"{ROUTE}/analysis"),className="vol-native-link")
+        ])
+    selected = set(_validated_selection(selection))
+    children=[html.H3("INDICATORS · SCREEN B", className="screen-b-selector-title"),
               html.Div("Native volatility analytics. The HMI only plots metrics precomputed by Processing; it does not apply RSI/MACD/ATR or moving averages to volatility.",className="vol-native-note")]
     for title,cid,opts in groups:
-        children.append(html.Div(className="vol-native-section",children=[html.Div(title,className="vol-native-label"),dcc.Checklist(id=cid,options=opts,value=[o["value"] for o in opts],className="vol-native-check")]))
-    return html.Div(className="vol-native-panel",children=children)
+        children.append(html.Div(className="vol-native-section",children=[html.Div(title.replace(" · SCREEN B", ""),className="vol-native-label"),dcc.Checklist(id=cid,options=opts,value=[o["value"] for o in opts if o["value"] in selected],className="vol-native-check")]))
+    return html.Div(className="screen-b-selector vol-native-panel",children=children)
 
 def _summary_column(contract: dict[str, Any], selected: list[str]) -> html.Div:
     indicators = _safe_dict(_safe_dict(contract.get("volatility_analysis")).get("indicators"))
@@ -239,12 +260,20 @@ def _summary_column(contract: dict[str, Any], selected: list[str]) -> html.Div:
         )
     return html.Div(
         className="vol-summary-column",
-        children=[html.Div("VOLATILITY REGIME SUMMARY", className="vol-summary-title"), *rows],
+        children=[
+            html.Div("CURRENT VOLATILITY REGIME SUMMARY", className="vol-summary-title"),
+            html.Div(
+                "Latest-state snapshot. The 7D / 30D selector changes historical charts, not this current-state summary.",
+                className="vol-summary-meta",
+                style={"padding": "0 10px 8px"},
+            ),
+            *rows,
+        ],
     )
 
 
 def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: list[str] | None) -> html.Div:
-    selected = [iid for iid in ANALYSIS_ORDER if iid in set(selection or ANALYSIS_ORDER)]
+    selected = _validated_selection(selection)
     indicators = _safe_dict(_safe_dict(contract.get("volatility_analysis")).get("indicators"))
     cards: list[Any] = []
     for iid in selected:
@@ -252,28 +281,30 @@ def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: 
         title_text = f"{str(block.get('section') or 'ANALYSIS')} · {str(block.get('label') or iid).upper()}"
         cards.append(
             html.Div(
-                className="vol-analysis-card",
+                className="screen-b-card vol-analysis-card",
                 children=[
-                    html.Div(contextual_help_label(title_text, family="volatility", section="screen_b", key=iid), className="vol-analysis-title"),
+                    html.Div(contextual_help_label(title_text, family="volatility", section="screen_b", key=iid), className="screen-b-card-title vol-analysis-title"),
                     dcc.Graph(
                         figure=_analysis_figure(block, iid, range_id),
-                        config={"displaylogo": False, "responsive": True},
-                        style={"height": "220px", "minHeight": "220px", "width": "100%"},
+                        config={"displaylogo": False, "responsive": False},
+                        animate=False,
+                        className="screen-b-graph",
+                        style={"height": "220px", "minHeight": "220px", "maxHeight": "220px", "width": "100%"},
                     ),
                 ],
             )
         )
-    body = html.Div(cards, className="vol-analysis-grid")
+    body = html.Div(cards, className="screen-b-grid vol-analysis-grid")
     return html.Div(
         children=[
             dcc.Link("← BACK", href=localized_href(ROUTE), className="vol-analysis-back"),
-            html.Div(className="vol-analysis-layout", children=[body, _summary_column(contract, selected)]),
+            html.Div(className="screen-b-layout vol-analysis-layout", children=[body, html.Div([_selection_panel(analysis=True, selection=selected), _summary_column(contract, selected)])]),
         ]
     )
 
 @callback(
     Output(SELECTION_STORE_ID,"data"),
-    Input("vol-level-select","value"),Input("vol-pricing-select","value"),Input("vol-options-select","value"),Input("vol-dynamics-select","value"),Input("vol-regime-select","value"),
+    Input("vol-level-select","value",allow_optional=True),Input("vol-pricing-select","value",allow_optional=True),Input("vol-options-select","value",allow_optional=True),Input("vol-dynamics-select","value",allow_optional=True),Input("vol-regime-select","value",allow_optional=True),
     prevent_initial_call=True,
 )
 def _save_selection(*groups: Any) -> list[str]:
@@ -295,18 +326,17 @@ def render(contract: dict[str, Any], view: str, market: str | None, timeframe: s
     if view == "reference":
         return screen_page(_volatility_stylesheet(),screen_header(contract),reference_gallery(REFERENCE_IMAGES))
     if view == "analysis":
-        return screen_page(_volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="session", data=ANALYSIS_ORDER),html.Div(id=ANALYSIS_CONTENT_ID,children=_analysis_screen(contract,range_id,None)))
+        return screen_page(_volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="local"),html.Div(id=ANALYSIS_CONTENT_ID,children=_analysis_screen(contract,range_id,None)))
     charts=_safe_dict(contract.get("charts"))
     return screen_page(
-        _volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="session", data=ANALYSIS_ORDER),screen_header(contract),kpi_grid(contract.get("kpis"), help_family="volatility"),
-        html.Div(className="vol-native-main",children=[
+        _volatility_stylesheet(),dcc.Store(id=SELECTION_STORE_ID,storage_type="local"),screen_header(contract),kpi_grid(contract.get("kpis"), help_family="volatility"),
+        html.Div(className="vol-native-main",style={"gridTemplateColumns":"minmax(0,1fr)"},children=[
             html.Div(className="vol-native-grid",children=[
                 _screen_a_card(contract,"realized_volatility",range_id),
                 _screen_a_card(contract,"implied_volatility",range_id),
                 _screen_a_card(contract,"implied_vs_realized",range_id),
                 _screen_a_card(contract,"term_structure",range_id),
             ]),
-            _selection_panel(),
         ]),
         html.Div(id=ANALYSIS_CONTENT_ID,style={"display":"none"}),
     )

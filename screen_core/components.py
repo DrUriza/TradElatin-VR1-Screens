@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any
 
 from dash import dash_table, dcc, html
 
@@ -186,40 +186,6 @@ def graph_card(
     )
 
 
-def unavailable_analysis_card(name: str, reason: str = "No precomputed indicator block in JSON") -> html.Div:
-    return html.Div(
-        className="analysis-empty-card",
-        children=[
-            html.Div(humanize_key(name), className="analysis-empty-title"),
-            html.Div("UNAVAILABLE", className="analysis-empty-status"),
-            html.Div(reason, className="analysis-empty-reason"),
-        ],
-    )
-
-
-def analysis_grid(
-    contract: dict[str, Any],
-    chart_ids: Iterable[str],
-    *,
-    market: str | None,
-    timeframe: str | None,
-    range_id: str | None,
-    minimum_slots: int = 9,
-    help_family: str | None = None,
-) -> html.Div:
-    charts = contract.get("charts") if isinstance(contract.get("charts"), dict) else {}
-    cards: list[Any] = []
-    for chart_id in chart_ids:
-        chart = charts.get(chart_id)
-        if isinstance(chart, dict):
-            cards.append(graph_card(chart, chart_id=f"analysis-{chart_id}", title=chart.get("title") or humanize_key(chart_id), market=market, timeframe=timeframe, range_id=range_id, height=310, class_name="analysis-chart-card", help_family=help_family, help_section="screen_b", help_key=chart_id, show_card_title=True))
-        else:
-            cards.append(unavailable_analysis_card(chart_id))
-    while len(cards) < minimum_slots:
-        cards.append(unavailable_analysis_card(f"indicator_{len(cards) + 1}"))
-    return html.Div(cards, className="analysis-grid")
-
-
 def _flatten_cell(value: Any) -> Any:
     if value is None:
         return "—"
@@ -294,20 +260,6 @@ def data_table_card(table: dict[str, Any] | None, table_id: str, title: str | No
     )
 
 
-def nested_table_sections(table: dict[str, Any] | None, prefix: str) -> html.Div:
-    if not isinstance(table, dict):
-        return html.Div("No indicator summary table in JSON", className="empty-inline")
-    cards: list[Any] = []
-    direct_rows = _table_rows(table)
-    if direct_rows:
-        cards.append(data_table_card(table, prefix))
-    else:
-        for key, value in table.items():
-            if isinstance(value, dict) and _table_rows(value):
-                cards.append(data_table_card(value, f"{prefix}-{key}", title=value.get("title") or humanize_key(key), max_rows=10))
-    return html.Div(cards or [html.Div("No tabular rows in this contract section", className="empty-inline")], className="summary-stack")
-
-
 def widget_cards(widgets: Any, max_items: int = 6, help_family: str | None = None) -> html.Div:
     if not isinstance(widgets, dict):
         return html.Div("No widgets in JSON", className="empty-inline")
@@ -360,17 +312,6 @@ def reference_gallery(image_paths: list[str]) -> html.Div:
         ],
         className="reference-gallery",
     )
-
-
-def contract_warning(message: str) -> html.Div:
-    return html.Div(
-        [html.Span("CONTRACT NOTE", className="contract-note-label"), html.Span(message, className="contract-note-text")],
-        className="contract-note",
-    )
-
-
-def two_column(left: Any, right: Any, left_class: str = "span-8", right_class: str = "span-4") -> html.Div:
-    return html.Div([html.Div(left, className=left_class), html.Div(right, className=right_class)], className="dashboard-grid")
 
 
 def screen_page(header: Any, *sections: Any) -> html.Div:

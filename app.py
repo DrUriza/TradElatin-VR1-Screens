@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+from functools import lru_cache
 from types import ModuleType
 from typing import Any
 
@@ -14,12 +15,14 @@ from screen_core.i18n import (
     locale_context,
     locale_from_search,
     localize_component_tree,
+    localized_href,
     localize_options,
     tr,
 )
 from screens import (
     cvd_volume_orderflow,
     etf_exchange_flows,
+    grok_radar,
     liquidity_microstructure,
     long_short_liquidations,
     on_chain_miners,
@@ -37,9 +40,33 @@ SCREENS: tuple[ModuleType, ...] = (
     volatility_market_regimes,
     long_short_liquidations,
     liquidity_microstructure,
+    grok_radar,
 )
 SCREEN_BY_ROUTE = {module.ROUTE: module for module in SCREENS}
 DEFAULT_SCREEN = prices
+
+
+def _module_uses_contract(module: ModuleType) -> bool:
+    return bool(getattr(module, "USES_CONTRACT", True))
+
+
+def _module_contract(module: ModuleType) -> dict[str, Any]:
+    static = getattr(module, "STATIC_CONTRACT", None)
+    if not _module_uses_contract(module) and isinstance(static, dict):
+        return static
+    return load_contract(module.CONTRACT_FILE)
+
+
+def _module_contract_revision(module: ModuleType) -> str:
+    if not _module_uses_contract(module):
+        return str(getattr(module, "STATIC_REVISION", "static"))
+    return contract_revision(module.CONTRACT_FILE)
+
+
+def _module_contract_label(module: ModuleType) -> str:
+    if not _module_uses_contract(module):
+        return f"<static:{module.ROUTE.strip('/') or 'screen'}>"
+    return str(module.CONTRACT_FILE)
 
 # Processing cadence is family-owned and independent from chart timeframe.
 FAMILY_KEY_BY_ROUTE = {
@@ -51,6 +78,16 @@ FAMILY_KEY_BY_ROUTE = {
     volatility_market_regimes.ROUTE: "volatility",
     long_short_liquidations.ROUTE: "liquidations",
     liquidity_microstructure.ROUTE: "liquidity",
+}
+ANALYSIS_LABEL_BY_ROUTE = {
+    prices.ROUTE: "PRICE TECHNICAL ANALYSIS ↗",
+    cvd_volume_orderflow.ROUTE: "CVD & ORDER FLOW ANALYSIS ↗",
+    open_interest_and_funding.ROUTE: "OPEN INTEREST ANALYSIS ↗",
+    etf_exchange_flows.ROUTE: "ETF & CAPITAL FLOW ANALYSIS ↗",
+    on_chain_miners.ROUTE: "ON-CHAIN & MINERS ANALYSIS ↗",
+    volatility_market_regimes.ROUTE: "VOLATILITY & REGIMES ANALYSIS ↗",
+    long_short_liquidations.ROUTE: "LIQUIDATIONS ANALYSIS ↗",
+    liquidity_microstructure.ROUTE: "LIQUIDITY ANALYSIS ↗",
 }
 AUTO_REFRESH_ROUTES = {
     route for route, family in FAMILY_KEY_BY_ROUTE.items()
@@ -69,14 +106,15 @@ RANGE_SELECTOR_ROUTES = {
     etf_exchange_flows.ROUTE,
     on_chain_miners.ROUTE,
     volatility_market_regimes.ROUTE,
+    long_short_liquidations.ROUTE,
 }
 NO_TEMPORAL_SELECTOR_ROUTES = {
-    long_short_liquidations.ROUTE,
     liquidity_microstructure.ROUTE,
+    grok_radar.ROUTE,
 }
 
 DEFAULT_REFRESH_MS = 60_000
-REFRESH_POLL_MS = 1_000
+REFRESH_POLL_MS = 250
 
 TRACE_I18N = os.getenv("TRADELATIN_TRACE_I18N", "0").lower() in {"1", "true", "yes"}
 
@@ -252,6 +290,23 @@ app = Dash(
     assets_ignore=r"^i18n_runtime\.js$",
 )
 server = app.server
+SCREEN_BUILD_ID = os.getenv("TRADELATIN_SCREEN_BUILD_ID", "V4.2_FINAL_R10_GROK_RADAR_HF3.1")
+
+
+@server.route("/__tradelatin__/health", methods=["GET"])
+def tradelatin_screen_health():
+    return {
+        "status": "ok",
+        "service": "screen",
+        "build_id": SCREEN_BUILD_ID,
+        "pid": os.getpid(),
+        "contract_dir": os.getenv("TRADELATIN_CONTRACT_DIR", "data/contracts"),
+        "prices_data_seconds": 5,
+        "liquidity_data_seconds": 5,
+        "liquidity_watch_ms": FAMILY_AUTO_REFRESH_MS.get("liquidity"),
+        "cvd_data_seconds": 15,
+    }
+
 
 
 def _language_switch() -> html.Div:
@@ -305,7 +360,7 @@ def serve_layout() -> html.Div:
                         style={
                             'flex': '1 1 auto',
                             'display': 'grid',
-                            'gridTemplateColumns': 'repeat(8, minmax(96px, 1fr))',
+                            'gridTemplateColumns': f'repeat({len(SCREENS)}, minmax(92px, 1fr))',
                             'alignItems': 'center',
                             'gap': '3px',
                             'minWidth': '0',
@@ -350,6 +405,11 @@ def serve_layout() -> html.Div:
                                     selector_buttons('MARKET', 'market-selector'),
                                     selector_buttons('TIMEFRAME', 'timeframe-selector'),
                                     selector_buttons('TIMEFRAME', 'range-selector'),
+                                    html.A(
+                                        id='family-analysis-button',
+                                        className='reload-button header-analysis-button',
+                                        style={'display': 'none', 'textDecoration': 'none'},
+                                    ),
                                     html.Button(
                                         "↻ RELOAD",
                                         id='manual-reload',
@@ -391,6 +451,36 @@ def serve_layout() -> html.Div:
 
 
 app.layout = serve_layout()
+
+
+@app.callback(
+    Output('family-analysis-button', 'children'),
+    Output('family-analysis-button', 'href'),
+    Output('family-analysis-button', 'title'),
+    Output('family-analysis-button', 'style'),
+    Input('url', 'pathname'),
+    Input('url', 'search'),
+)
+def sync_family_analysis_button(pathname: str | None, search: str | None) -> tuple[str, str, str, dict[str, str]]:
+    module, route_view = resolve_route(pathname)
+    locale = locale_from_search(search)
+    if not bool(getattr(module, "HAS_ANALYSIS", False)):
+        return "", localized_href(module.ROUTE, locale), "", {"display": "none"}
+    if route_view == 'analysis':
+        label = tr("← BACK", locale)
+        href = localized_href(module.ROUTE, locale)
+        title = tr("Back to Screen A", locale)
+    else:
+        label = tr(ANALYSIS_LABEL_BY_ROUTE[module.ROUTE], locale)
+        href = localized_href(f"{module.ROUTE}/analysis", locale)
+        title = tr("Open technical analysis", locale)
+    style = {
+        'display': 'inline-flex',
+        'alignItems': 'center',
+        'textDecoration': 'none',
+        'whiteSpace': 'nowrap',
+    }
+    return label, href, title, style
 
 
 @app.callback(
@@ -486,7 +576,7 @@ def sync_controls(
 ) -> tuple[Any, ...]:
     locale = locale_from_search(search)
     module, route_view = resolve_route(pathname)
-    contract = load_contract(module.CONTRACT_FILE)
+    contract = _module_contract(module)
 
     view_options = [{'label': tr('SCREEN A', locale), 'value': 'main'}]
     if module.HAS_ANALYSIS:
@@ -532,21 +622,44 @@ def sync_controls(
 
     shown = {'display': 'flex'}
     hidden = {'display': 'none'}
-    revision = contract_revision(module.CONTRACT_FILE)
+    revision = _module_contract_revision(module)
+
+    # Contract rereads must not re-emit valid selector values.  Re-emitting
+    # the same value can still trigger downstream callbacks and reconstruct
+    # page-content, which resets local UI state (analysis view, checkboxes,
+    # exchange/timeframe controls).  Only replace a value on reload when the
+    # current selection is no longer valid in the new contract.
+    reread = ctx.triggered_id == 'reload-json'
+    view_value = no_update if reread else selected_view
+    market_value = (
+        no_update
+        if reread and (not market_values or current_market in market_values)
+        else selected_market
+    )
+    timeframe_value = (
+        no_update
+        if reread and (not timeframe_values or current_timeframe in timeframe_values)
+        else selected_timeframe
+    )
+    range_value = (
+        no_update
+        if reread and (not range_values or current_range in range_values)
+        else selected_range
+    )
 
     return (
         view_options,
-        selected_view,
+        view_value,
         market_options,
-        selected_market,
+        market_value,
         shown if market_visible else hidden,
         timeframe_options,
-        selected_timeframe,
+        timeframe_value,
         shown if timeframe_options else hidden,
         range_options,
-        selected_range,
+        range_value,
         shown if range_options else hidden,
-        f'{module.CONTRACT_FILE} · {revision}',
+        f'{_module_contract_label(module)} · {revision}',
     )
 
 
@@ -563,7 +676,7 @@ def sync_controls(
 def sync_compact_header(pathname: str | None, search: str | None, _reload_clicks: int) -> tuple[Any, ...]:
     locale = locale_from_search(search)
     module, route_view = resolve_route(pathname)
-    contract = load_contract(module.CONTRACT_FILE)
+    contract = _module_contract(module)
     meta = screen_metadata(contract)
 
     if route_view == 'analysis':
@@ -592,6 +705,8 @@ def sync_compact_header(pathname: str | None, search: str | None, _reload_clicks
 )
 def sync_refresh_policy(pathname: str | None) -> tuple[dict[str, Any], bool, int]:
     module = get_screen(pathname)
+    if not _module_uses_contract(module):
+        return {'display': 'none'}, True, DEFAULT_REFRESH_MS
     reload_style = {'display': 'inline-flex'}
     family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE)
     interval = FAMILY_AUTO_REFRESH_MS.get(str(family or ''))
@@ -621,18 +736,37 @@ def orchestrate_family_refresh(
     refresh_state: dict[str, Any] | None,
 ) -> tuple[Any, dict[str, Any], bool]:
     module = get_screen(pathname)
+    if not _module_uses_contract(module):
+        return no_update, {'status': 'idle'}, True
     family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE, module.ROUTE.strip('/') or 'prices')
     state = refresh_state if isinstance(refresh_state, dict) else {'status': 'idle'}
     trigger = ctx.triggered_id
 
-    if trigger in {'auto-refresh', 'manual-reload'}:
+    if trigger == 'auto-refresh':
+        # Do not overwrite an explicit manual-refresh transaction while its
+        # completion poll is waiting for a new contract revision.
         if state.get('status') == 'updating':
             return no_update, state, False
-        reason = 'manual' if trigger == 'manual-reload' else 'auto'
+        # Automatic families are scheduled by Processing itself. The HMI only
+        # watches the published contract and repaints when its revision changes.
+        # This lets Liquidity poll every 1 s without re-rendering unchanged data.
+        current_revision = contract_revision(module.CONTRACT_FILE)
+        previous_revision = str(state.get('auto_revision') or '')
+        previous_family = str(state.get('auto_family') or '')
+        next_state = {
+            'status': 'idle',
+            'auto_family': family,
+            'auto_revision': current_revision,
+        }
+        if previous_family == family and previous_revision == current_revision:
+            return no_update, next_state, True
+        return int(current_signal or 0) + 1, next_state, True
+
+    if trigger == 'manual-reload':
         baseline = contract_revision(module.CONTRACT_FILE)
         dispatch = request_family_refresh_async(
             family=family,
-            reason=reason,
+            reason='manual',
             contract_file=module.CONTRACT_FILE,
         )
         if not dispatch.configured:
@@ -646,7 +780,7 @@ def orchestrate_family_refresh(
             'contract_file': module.CONTRACT_FILE,
             'baseline_revision': baseline,
             'started_at': time.time(),
-            'reason': reason,
+            'reason': 'manual',
         }
         return no_update, next_state, False
 
@@ -712,6 +846,41 @@ def render_refresh_status(
     return '', 'status-badge status-warning', {'display': 'none'}
 
 
+# Prices, CVD and OI own their timeframe-sensitive rendering in dedicated
+# callbacks.  Rebuilding page-content on every timeframe click would
+# destroy browser-owned indicator state and re-inject DEFAULT_* values.
+PERSISTENT_INDICATOR_TIMEFRAME_ROUTES = {
+    prices.ROUTE,
+    cvd_volume_orderflow.ROUTE,
+    open_interest_and_funding.ROUTE,
+}
+
+
+@lru_cache(maxsize=64)
+def _render_screen_cached(
+    route: str,
+    route_view: str,
+    locale: str,
+    market: str | None,
+    timeframe: str | None,
+    range_id: str | None,
+    contract_revision_key: str,
+) -> html.Div:
+    """Build each unchanged screen only once per selector combination.
+
+    Plotly figure construction is the dominant server-side navigation cost.
+    The contract revision participates in the cache key, so a newly published
+    JSON contract always produces a fresh screen while revisiting an unchanged
+    route can reuse its already-localized component tree.
+    """
+    del contract_revision_key
+    module = SCREEN_BY_ROUTE.get(route, DEFAULT_SCREEN)
+    contract = _module_contract(module)
+    with locale_context(locale):
+        rendered = module.render(contract, route_view, market, timeframe, range_id)
+        return localize_component_tree(rendered, locale)
+
+
 @app.callback(
     Output('page-content', 'children'),
     Input('url', 'pathname'),
@@ -719,7 +888,6 @@ def render_refresh_status(
     Input('market-selector', 'value'),
     Input('timeframe-selector', 'value'),
     Input('range-selector', 'value'),
-    Input('reload-json', 'n_clicks'),
 )
 def render_screen(
     pathname: str | None,
@@ -727,22 +895,43 @@ def render_screen(
     market: str | None,
     timeframe: str | None,
     range_id: str | None,
-    _reload_clicks: int,
 ) -> html.Div:
     locale = locale_from_search(search)
     _trace_i18n("render", locale=locale, pathname=pathname, search=search)
     module, route_view = resolve_route(pathname)
+
+    # Liquidation-map range changes are handled by the three dedicated map
+    # callbacks.  Keeping page-content mounted preserves Screen B navigation
+    # and the local Long/Short exchange/timeframe selections.
+    if ctx.triggered_id == 'range-selector' and module.ROUTE == long_short_liquidations.ROUTE:
+        return no_update
+
+    # Preserve indicator controls across timeframe changes.  The visible
+    # figures and Screen B content are refreshed by family callbacks that
+    # already consume timeframe-selector directly.
+    if (
+        ctx.triggered_id == 'timeframe-selector'
+        and module.ROUTE in PERSISTENT_INDICATOR_TIMEFRAME_ROUTES
+    ):
+        return no_update
+
     try:
-        contract = load_contract(module.CONTRACT_FILE)
-        with locale_context(locale):
-            rendered = module.render(contract, route_view, market, timeframe, range_id)
-            return localize_component_tree(rendered, locale)
+        revision = _module_contract_revision(module)
+        return _render_screen_cached(
+            module.ROUTE,
+            route_view,
+            locale,
+            market,
+            timeframe,
+            range_id,
+            revision,
+        )
     except Exception as exc:
         return html.Div(
             className='fatal-contract-error',
             children=[
                 html.H2(tr('CONTRACT LOAD ERROR', locale)),
-                html.Div(module.CONTRACT_FILE, className='fatal-file'),
+                html.Div(_module_contract_label(module), className='fatal-file'),
                 html.Pre(str(exc)),
                 html.P(tr('Correct the JSON and press RELOAD. No fallback data is fabricated.', locale)),
             ],

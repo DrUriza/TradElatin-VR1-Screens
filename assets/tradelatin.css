@@ -298,6 +298,20 @@ a { color: inherit; text-decoration: none; }
   letter-spacing: .3px;
 }
 
+.header-analysis-button {
+  height: 18px;
+  min-width: max-content;
+  padding: 0 8px;
+  align-items: center;
+  justify-content: center;
+  border-color: #1677b8;
+  color: #4db8ff;
+  border-radius: 3px;
+  font-size: 6.5px;
+  line-height: 16px;
+  letter-spacing: .3px;
+}
+
 .compact-family-meta {
   display: flex;
   align-items: center;
@@ -403,4 +417,178 @@ a { color: inherit; text-decoration: none; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+/* Analysis navigation lives in the compact family header. */
+.analysis-launch-row {
+    display: none !important;
+}
+
+/* Screen navigation is centralized next to timeframe/range and reload. */
+.analysis-back-row,
+.liq-analysis-back-row,
+.vol-analysis-back {
+    display: none !important;
+}
+
+.liquidity-analysis-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: 8px;
+    align-items: start;
+}
+
+.liquidity-analysis-sidebar {
+    min-width: 0;
+}
+
+@media (max-width: 1100px) {
+    .liquidity-analysis-layout { grid-template-columns: 1fr; }
+}
+
+
+/* ========================================================================== */
+/* Screen B selector homology: Liquidity                                      */
+/* ========================================================================== */
+.liquidity-analysis-controls {
+    border: 1px solid #123247;
+    border-radius: 4px;
+    background: linear-gradient(180deg, #061522 0%, #04111c 100%);
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.liquidity-selector-title {
+    min-height: 27px;
+    display: flex;
+    align-items: center;
+    padding: 0 9px;
+    border-bottom: 1px solid #102b3d;
+    color: #dce6ec;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .1px;
+    box-sizing: border-box;
+}
+
+.liquidity-selector-note {
+    padding: 7px 9px 6px;
+    color: #7f96aa;
+    font-size: 8px;
+    line-height: 1.4;
+}
+
+.liquidity-selector-groups {
+    padding: 0 9px 8px;
+}
+
+.liquidity-selector-group {
+    padding: 7px 0 6px;
+    border-top: 1px solid #173247;
+}
+
+.liquidity-selector-group-title {
+    margin-bottom: 5px;
+    color: #718da3;
+    font-size: 7.5px;
+    font-weight: 600;
+    letter-spacing: .15px;
+}
+
+.liquidity-analysis-checklist label {
+    display: flex !important;
+    align-items: center;
+    min-width: 0;
+    margin: 0 !important;
+    color: #c7d2da !important;
+    font-size: 8px !important;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.liquidity-analysis-checklist label:hover {
+    color: #ffffff !important;
+}
+
+.liquidity-analysis-checklist input[type="checkbox"] {
+    width: 11px;
+    height: 11px;
+    min-width: 11px;
+    margin: 0 6px 0 0 !important;
+    accent-color: #2f80ff;
+    cursor: pointer;
+}
+
+
+/* GROK RADAR ----------------------------------------------------------- */
+.grok-radar-page {
+    padding: 8px 14px 18px;
+    color: #d9e8f5;
+}
+.grok-radar-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: #071522;
+    border: 1px solid #17354a;
+}
+.grok-radar-intro {
+    color: #8aa2b5;
+    font-size: 11px;
+    line-height: 1.45;
+}
+.grok-radar-button:disabled {
+    opacity: .55;
+    cursor: wait;
+}
+.grok-radar-results {
+    display: grid;
+    gap: 10px;
+}
+.grok-radar-bias-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+}
+.grok-radar-factor-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+.grok-radar-results ul {
+    margin: 0;
+    padding-left: 18px;
+    color: #d9e8f5;
+    font-size: 11px;
+    line-height: 1.55;
+}
+.grok-radar-levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.grok-radar-level {
+    display: inline-flex;
+    padding: 4px 8px;
+    border: 1px solid #24445a;
+    background: #071522;
+    color: #9eb2c1;
+    font-size: 10px;
+}
+.grok-radar-disclaimer {
+    margin: 0;
+    color: #6f8798;
+    font-size: 10px;
+}
+@media (max-width: 900px) {
+    .grok-radar-bias-grid,
+    .grok-radar-factor-grid {
+        grid-template-columns: 1fr;
+    }
+    .grok-radar-toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
 }

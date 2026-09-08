@@ -13,9 +13,18 @@ def format_timestamp(value: Any) -> str:
         return "—"
     try:
         if isinstance(value, str) and not value.isdigit():
-            return value.replace("T", " ").replace("+00:00", " UTC").replace("Z", " UTC")
-        dt = datetime.fromtimestamp(float(value), tz=timezone.utc)
-        return dt.strftime("%Y-%m-%d %H:%M UTC")
+            normalized = value.strip().replace("Z", "+00:00")
+            dt = datetime.fromisoformat(normalized)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.astimezone(timezone.utc)
+        else:
+            timestamp = float(value)
+            # Accept Unix timestamps expressed in either seconds or milliseconds.
+            if abs(timestamp) >= 100_000_000_000:
+                timestamp /= 1000
+            dt = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+        return dt.strftime("%H:%M:%S de %d/%m/%Y")
     except (TypeError, ValueError, OSError):
         return str(value)
 
@@ -70,8 +79,3 @@ def format_metric(value: Any, unit: Any = None, display_value: Any = None) -> st
     return f"{text} {unit_text}"
 
 
-def first_not_none(*values: Any) -> Any:
-    for value in values:
-        if value is not None:
-            return value
-    return None

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import math
 from typing import Any
 from urllib.parse import quote
 
 import plotly.graph_objects as go
-from dash import Input, Output, callback, ctx, dcc, html, no_update
+from dash import Input, Output, callback, dcc, html
 
 from screen_core.components import (
     graph_card,
@@ -15,7 +16,7 @@ from screen_core.components import (
     widget_cards,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
+from screen_core.i18n import locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.figures import apply_analysis_figure_layout
 
@@ -51,13 +52,6 @@ SELECTION_STORE_ID = "onchain-native-selection"
 ANALYSIS_CONTENT_ID = "onchain-analysis-content"
 
 TARGETS = ("miner_reserve", "sopr_7d", "hashrate", "difficulty")
-TARGET_LABELS = {
-    "miner_reserve": "MINER RESERVE",
-    "sopr_7d": "SOPR / aSOPR",
-    "hashrate": "HASHRATE",
-    "difficulty": "DIFFICULTY",
-}
-
 ANALYSIS_ORDER = (
     "miner_reserve_change_zscore",
     "miner_selling_pressure",
@@ -133,9 +127,10 @@ LOCAL_CSS = """
 .onchain-top-widgets .widget-grid { grid-template-columns: repeat(4,minmax(120px,1fr)); gap:3px; }
 .onchain-top-widgets .widget-card { min-height:36px; padding:2px 7px; }
 .onchain-main-grid { display:grid; grid-template-columns:minmax(0,1fr) 306px; gap:8px; align-items:stretch; }
-.onchain-series-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:291px 291px; gap:8px; height:590px; }
+.onchain-series-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); grid-template-rows:217px 217px; gap:8px; height:442px; }
 .onchain-card { min-width:0; border:1px solid #173247; background:#06111d; overflow:hidden; }
-.onchain-selector { border:1px solid #173247; background:#06111d; padding:10px; height:590px; overflow:auto; }
+.onchain-series-grid .onchain-card .js-plotly-plot,.onchain-series-grid .onchain-card .plot-container,.onchain-series-grid .onchain-card .svg-container{height:190px !important;min-height:190px !important;max-height:190px !important;}
+.onchain-selector { border:1px solid #173247; background:#06111d; padding:10px; height:auto; align-self:start; overflow:auto; }
 .onchain-button { border:1px solid #1677ff; color:#4da3ff; background:#071522; font-size:11px; font-weight:700; min-height:34px; }
 .onchain-heading { color:#d9e8f5; font-size:11px; font-weight:700; margin:4px 0; }
 .onchain-note { color:#7f96aa; font-size:8px; line-height:1.35; margin-bottom:10px; }
@@ -146,9 +141,9 @@ LOCAL_CSS = """
 .onchain-analysis-shell { min-height:100vh; background:#06111d; }
 .analysis-back-row { padding:8px 14px 0; }
 .analysis-back-button { display:inline-flex; border:1px solid #1677ff; color:#4da3ff; background:#071522; padding:7px 12px; font-size:9px; text-decoration:none; }
-.onchain-analysis-layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:8px; padding:8px 14px 18px; }
-.onchain-analysis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-.onchain-analysis-card { border:1px solid #173247; background:#071522; min-width:0; overflow:hidden; }
+.onchain-analysis-layout { display:grid; grid-template-columns:minmax(0,1fr) 286px; gap:8px; padding:8px 14px 18px; align-items:start; }
+.onchain-analysis-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; align-content:start; align-self:start; }
+.onchain-analysis-card { border:1px solid #173247; background:#071522; min-width:0; height:247px; min-height:247px; max-height:247px; overflow:hidden; }
 .onchain-analysis-card-title { color:#d9e8f5; font-size:8px; font-weight:700; padding:7px 8px; border-bottom:1px solid #173247; }
 .onchain-summary-column { border:1px solid #173247; background:#071522; padding:10px; align-self:start; }
 .onchain-summary-title { color:#4da3ff; font-size:10px; font-weight:700; margin-bottom:9px; }
@@ -168,6 +163,19 @@ def _safe_dict(value: Any) -> dict[str, Any]:
 
 def _safe_list(value: Any) -> list[Any]:
     return value if isinstance(value, list) else []
+
+
+def _finite_number(value: Any) -> float | None:
+    """Return a finite numeric value for plotting, preserving missing data as gaps.
+
+    Processing is allowed to emit ``None`` for legitimate warm-up / unavailable
+    samples.  The HMI must never coerce those samples to zero and must not fail
+    while choosing presentation attributes such as bar colors.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    number = float(value)
+    return number if math.isfinite(number) else None
 
 
 def _unique(values: list[str]) -> list[str]:
@@ -232,7 +240,7 @@ def _metric_figure(contract: dict[str, Any], chart_id: str, range_id: str | None
         }
 
         if chart_id == "miner_reserve":
-            trace_kwargs.update(line={"color": BLUE, "width": 1.7}, fill="tozeroy", fillcolor="rgba(47,128,255,.08)")
+            trace_kwargs.update(line={"color": BLUE, "width": 1.7})
         elif chart_id == "sopr_7d":
             trace_kwargs.update(line={"color": PURPLE, "width": 1.7})
         elif chart_id == "hashrate":
@@ -252,7 +260,7 @@ def _metric_figure(contract: dict[str, Any], chart_id: str, range_id: str | None
 
     fig.update_layout(
         title=None,
-        height=291,
+        height=190,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={"l": 44, "r": 10, "t": 20, "b": 34},
@@ -279,12 +287,15 @@ def _native_block(contract: dict[str, Any], indicator_id: str, range_id: str | N
 def _add_line(fig: go.Figure, x: list[Any], values: list[Any], name: str, *, secondary: bool = False, dash: str = "solid", width: float = 1.35) -> None:
     if len(values) != len(x):
         return
-    fig.add_trace(go.Scatter(x=x, y=values, mode="lines", name=name.replace("_", " ").upper(), line={"color": TRACE_COLORS.get(name, BLUE), "width": width, "dash": dash}, yaxis="y2" if secondary else "y", connectgaps=False))
+    numeric_values = [_finite_number(value) for value in values]
+    if not any(value is not None for value in numeric_values):
+        return
+    fig.add_trace(go.Scatter(x=x, y=numeric_values, mode="lines", name=name.replace("_", " ").upper(), line={"color": TRACE_COLORS.get(name, BLUE), "width": width, "dash": dash}, yaxis="y2" if secondary else "y", connectgaps=False))
 
 
 def _native_indicator_figure(contract: dict[str, Any], indicator_id: str, range_id: str | None) -> go.Figure:
     indicator, block = _native_block(contract, indicator_id, range_id)
-    timestamps = [int(v) for v in _safe_list(block.get("timestamps"))]
+    timestamps = _safe_list(block.get("timestamps"))
     series = _safe_dict(block.get("series"))
     fig = go.Figure()
 
@@ -293,9 +304,11 @@ def _native_indicator_figure(contract: dict[str, Any], indicator_id: str, range_
     else:
         x = [_dt(v) for v in timestamps]
         if indicator_id == "miner_reserve_change_zscore":
-            vals = _safe_list(series.get("reserve_change_btc"))
-            if len(vals) == len(x):
-                fig.add_trace(go.Bar(x=x, y=vals, name="RESERVE CHANGE BTC", marker_color=[GREEN if float(v) >= 0 else RED for v in vals], opacity=.58))
+            vals = [_finite_number(value) for value in _safe_list(series.get("reserve_change_btc"))]
+            if len(vals) == len(x) and any(value is not None for value in vals):
+                neutral = "rgba(127,150,170,.28)"
+                colors = [neutral if value is None else (GREEN if value >= 0 else RED) for value in vals]
+                fig.add_trace(go.Bar(x=x, y=vals, name="RESERVE CHANGE BTC", marker_color=colors, opacity=.58))
             _add_line(fig, x, _safe_list(series.get("reserve_change_zscore")), "reserve_change_zscore", secondary=True, width=1.6)
             _add_line(fig, x, _safe_list(series.get("reserve_roc_30d_pct")), "reserve_roc_30d_pct", secondary=True, dash="dot")
         elif indicator_id == "hashrate_momentum_hash_ribbon":
@@ -349,7 +362,7 @@ def _native_indicator_figure(contract: dict[str, Any], indicator_id: str, range_
         trace.name = compact.get(str(trace.name), str(trace.name).title())
         if trace.name in secondary:
             trace.visible = "legendonly"
-    apply_analysis_figure_layout(fig, right_margin=42)
+    apply_analysis_figure_layout(fig, height=220, right_margin=42)
     fig.update_xaxes(gridcolor=GRID, zeroline=False, nticks=4, tickfont={"size": 6})
     fig.update_yaxes(gridcolor=GRID, zeroline=False, tickfont={"size": 6})
     return fig
@@ -357,11 +370,11 @@ def _native_indicator_figure(contract: dict[str, Any], indicator_id: str, range_
 
 def _checklist(component_id: str, options: list[dict[str, str]]) -> dcc.Checklist:
     values = [str(item["value"]) for item in options]
-    return dcc.Checklist(id=component_id, options=options, value=values, className="onchain-checklist", persistence="onchain-native-controls-v2", persistence_type="memory")
+    return dcc.Checklist(id=component_id, options=options, value=values, className="onchain-checklist", persistence="onchain-native-controls-v2", persistence_type="local")
 
 
 def _selector_panel() -> html.Div:
-    children: list[Any] = [
+    return html.Div(className="onchain-selector", children=[
         html.Div(
             style={"display": "grid", "gridTemplateColumns": "minmax(0,1fr) 34px", "gap": "4px", "marginBottom": "12px"},
             children=[
@@ -369,12 +382,20 @@ def _selector_panel() -> html.Div:
                 html.A("↗", href=localized_href(f"{ROUTE}/analysis"), target="_blank", rel="noopener noreferrer", className="onchain-button", style={"display": "flex", "alignItems": "center", "justifyContent": "center", "textDecoration": "none"}),
             ],
         ),
-        html.Div("NATIVE METRICS", className="onchain-heading"),
-        html.Div("Screen B specialized in miner treasury, selling pressure, mining economics, network health and regime change. The HMI only plots results precomputed by Processing.", className="onchain-note"),
+    ])
+
+
+def _analysis_selector_controls(selection: Any) -> html.Div:
+    selected = set(_safe_list(_safe_dict(selection).get("native")))
+    children: list[Any] = [
+        html.Div("INDICATORS · SCREEN B", className="screen-b-selector-title onchain-heading"),
+        html.Div("Select the native miner-analysis panels shown on this screen.", className="onchain-note"),
     ]
     for title, component_id, options in GROUPS:
-        children.append(html.Div(className="onchain-group", children=[html.Div(title, className="onchain-group-title"), _checklist(component_id, options)]))
-    return html.Div(className="onchain-selector", children=children)
+        checklist = _checklist(component_id, options)
+        checklist.value = [str(item["value"]) for item in options if str(item["value"]) in selected]
+        children.append(html.Div(className="onchain-group", children=[html.Div(title.replace(" · SCREEN B", ""), className="onchain-group-title"), checklist]))
+    return html.Div(className="screen-b-selector onchain-selector", children=children)
 
 
 def _selected_analysis(selection: Any) -> list[str]:
@@ -393,21 +414,29 @@ def _summary_column(contract: dict[str, Any], selected: list[str]) -> html.Div:
             html.Div(str(summary.get("signal") or "—"), className="onchain-summary-signal"),
             html.Div(str(summary.get("secondary") or ""), className="onchain-summary-signal"),
         ]))
-    return html.Div(className="onchain-summary-column", children=[html.Div("MINER REGIME SUMMARY", className="onchain-summary-title"), *rows])
+    return html.Div(className="onchain-summary-column", children=[
+        html.Div("CURRENT MINER REGIME SUMMARY", className="onchain-summary-title"),
+        html.Div(
+            "Latest-state snapshot. The 7D / 30D selector changes historical charts, not this current-state summary.",
+            className="onchain-summary-signal",
+            style={"padding": "0 10px 8px"},
+        ),
+        *rows,
+    ])
 
 
 def _analysis_screen(contract: dict[str, Any], range_id: str | None, selection: Any) -> html.Div:
     selected = _selected_analysis(selection)
     cards=[]
     for iid in selected:
-        cards.append(html.Div(className="onchain-analysis-card", children=[
-            html.Div(contextual_help_label(ANALYSIS_LABELS[iid], family="miners", section="screen_b", key=iid), className="onchain-analysis-card-title"),
-            dcc.Graph(figure=_native_indicator_figure(contract, iid, range_id), config={"displaylogo": False, "responsive": True}, style={"height": "310px", "minHeight": "310px", "width": "100%"}),
+        cards.append(html.Div(className="screen-b-card onchain-analysis-card", children=[
+            html.Div(contextual_help_label(ANALYSIS_LABELS[iid], family="miners", section="screen_b", key=iid), className="screen-b-card-title onchain-analysis-card-title"),
+            dcc.Graph(className="screen-b-graph", figure=_native_indicator_figure(contract, iid, range_id), config={"displaylogo": False, "responsive": False}, animate=False, style={"height": "220px", "minHeight": "220px", "maxHeight": "220px", "width": "100%"}),
         ]))
-    body = html.Div(cards, className="onchain-analysis-grid") if cards else html.Div("No metrics selected for Screen B.", className="contract-warning")
+    body = html.Div(cards, className="screen-b-grid onchain-analysis-grid") if cards else html.Div("No metrics selected for Screen B.", className="contract-warning")
     return html.Div(className="onchain-analysis-shell", children=[
         html.Div(className="analysis-back-row", children=[dcc.Link("← BACK", href=localized_href(ROUTE), className="analysis-back-button")]),
-        html.Div(className="onchain-analysis-layout", children=[body, _summary_column(contract, selected)]),
+        html.Div(className="screen-b-layout onchain-analysis-layout", children=[body, html.Div([_analysis_selector_controls(selection), _summary_column(contract, selected)])]),
     ])
 
 
@@ -451,7 +480,8 @@ def update_analysis(selection: Any, range_id: str | None, _reload: int | None, s
     locale = locale_from_search(search)
     contract = load_contract(CONTRACT_FILE)
     with locale_context(locale):
-        return localize_component_tree(_analysis_screen(contract, range_id, selection or _default_selection()), locale)
+        effective_selection = selection if isinstance(selection, dict) else _default_selection()
+        return localize_component_tree(_analysis_screen(contract, range_id, effective_selection), locale)
 
 
 def render(contract: dict[str, Any], view: str, market: str | None, timeframe: str | None, range_id: str | None) -> html.Div:
@@ -477,7 +507,7 @@ def render(contract: dict[str, Any], view: str, market: str | None, timeframe: s
         "hashrate": "onchain-hashrate",
         "difficulty": "onchain-difficulty",
     }
-    main_grid = html.Div(className="onchain-main-grid", children=[
+    main_grid = html.Div(className="onchain-main-grid", style={"gridTemplateColumns": "minmax(0,1fr)"}, children=[
         html.Div(className="onchain-series-grid", children=[
             html.Div(className="onchain-card", children=[
                 html.Div(
@@ -489,19 +519,18 @@ def render(contract: dict[str, Any], view: str, market: str | None, timeframe: s
                     ),
                     className="context-help-card-title context-help-card-title-compact",
                 ),
-                dcc.Graph(id=graph_ids[cid], figure=_metric_figure(contract, cid, range_id), config={"displaylogo": False, "responsive": True, "scrollZoom": True}, style={"height": "266px", "minHeight": "266px", "width": "100%"})
+                dcc.Graph(id=graph_ids[cid], figure=_metric_figure(contract, cid, range_id), config={"displaylogo": False, "responsive": False, "scrollZoom": True}, animate=False, style={"height": "190px", "minHeight": "190px", "maxHeight": "190px", "width": "100%"})
             ])
             for cid in TARGETS
         ]),
-        _selector_panel(),
     ])
 
     top_widgets = html.Div(widget_cards(contract.get("widgets"), max_items=4, help_family="miners"), className="onchain-top-widgets")
-    bottom = graph_card(charts.get("miner_net_position_change"), chart_id="miner-net-position", title="Miner Net Position Change", range_id=range_id, height=300, help_family="miners", help_section="screen_a", help_key="miner_net_position_change", show_card_title=True)
+    bottom = graph_card(charts.get("miner_net_position_change"), chart_id="miner-net-position", title="Miner Net Position Change", range_id=range_id, height=190, help_family="miners", help_section="screen_a", help_key="miner_net_position_change", show_card_title=True)
 
     return screen_page(
         _stylesheet(),
-        dcc.Store(id=SELECTION_STORE_ID, storage_type="local", data=_default_selection()),
+        dcc.Store(id=SELECTION_STORE_ID, storage_type="local"),
         screen_header(contract),
         top_widgets,
         main_grid,

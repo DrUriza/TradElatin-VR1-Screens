@@ -69,10 +69,6 @@ def lookup_help(
     return None
 
 
-def has_help(family: str | None, section: str | None, key: str | None = None) -> bool:
-    return lookup_help(family, section, key) is not None
-
-
 def _section(title: str, value: Any) -> html.Div | None:
     if value in (None, "", [], {}):
         return None

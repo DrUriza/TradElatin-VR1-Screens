@@ -6,19 +6,21 @@ from urllib.parse import quote
 
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
-from dash import Input, Output, callback, ctx, dcc, html, no_update
+from dash import Input, Output, State, callback, dcc, html
 
+from screen_core.selection_state import (
+    LOCAL_SELECTION_PERSISTENCE_TYPE,
+    resolve_persisted_selection,
+)
 from screen_core.components import (
-    contract_warning,
     kpi_grid,
     reference_gallery,
     screen_header,
     screen_page,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
+from screen_core.i18n import locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
-from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
 from screen_core.market_readers import FlowSnapshot, extract_flow_snapshot
 
@@ -27,7 +29,7 @@ ROUTE = "/cvd-orderflow"
 LABEL = "CVD"
 CONTRACT_FILE = "cvd_volume_orderflow_VR1_FINAL.json"
 HAS_ANALYSIS = True
-SCREEN_REVISION = "CVD_NATIVE_SCREEN_B_V4_RENDER_CLEAN"
+SCREEN_REVISION = "CVD_NATIVE_SCREEN_B_V5_KPI_COMPACT"
 
 REFERENCE_IMAGES = [
     "CVD/02_CVD_A.png",
@@ -46,6 +48,16 @@ MUTED = "#7f96aa"
 SELECTION_STORE_ID = "cvd-technical-selection"
 ANALYSIS_CONTENT_ID = "cvd-analysis-content"
 
+def _option_label(label: str, color: str) -> html.Span:
+    return html.Span(
+        [
+            html.Span("●", style={"color": color, "fontSize": "11px", "marginRight": "6px", "lineHeight": "1"}),
+            html.Span(label),
+        ],
+        style={"display": "inline-flex", "alignItems": "center", "gap": "0"},
+    )
+
+
 TREND_OPTIONS = [
     {"label": "EMA 9", "value": "ema_9"},
     {"label": "EMA 21", "value": "ema_21"},
@@ -56,18 +68,18 @@ TREND_OPTIONS = [
 ]
 
 DERIVED_OPTIONS = [
-    {"label": "CVD Slope / Acceleration", "value": "cvd_slope_acceleration"},
-    {"label": "Delta Z-Score", "value": "delta_zscore"},
-    {"label": "Buy/Sell Imbalance", "value": "buy_sell_imbalance"},
+    {"label": _option_label("CVD Slope / Acceleration", "#20d05c"), "value": "cvd_slope_acceleration"},
+    {"label": _option_label("Delta Z-Score", "#20d05c"), "value": "delta_zscore"},
+    {"label": _option_label("Buy/Sell Imbalance", "#20d05c"), "value": "buy_sell_imbalance"},
 ]
 
 MOMENTUM_OPTIONS = [
-    {"label": "Price ↔ CVD Divergence", "value": "price_cvd_divergence"},
-    {"label": "Spot ↔ Futures CVD Divergence", "value": "spot_futures_divergence"},
+    {"label": _option_label("Price ↔ CVD Divergence", "#a65cff"), "value": "price_cvd_divergence"},
+    {"label": _option_label("Spot ↔ Futures CVD Divergence", "#a65cff"), "value": "spot_futures_divergence"},
 ]
 
 VOLATILITY_OPTIONS = [
-    {"label": "Wasserstein Distance", "value": "wasserstein_distance"},
+    {"label": _option_label("Wasserstein Distance", "#2ea8ff"), "value": "wasserstein_distance"},
 ]
 
 DEFAULT_TREND = ["ema_9", "ema_21", "sma_20", "sma_50", "wma_20", "wma_50"]
@@ -120,16 +132,22 @@ CVD_LOCAL_CSS = """
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
-    height: 590px;
+    height: 428px;
 }
 
 .cvd-market-stack {
     display: grid;
     min-width: 0;
-    grid-template-rows: 350px 232px;
+    grid-template-rows: 235px 185px;
     gap: 8px;
-    height: 590px;
+    height: 428px;
 }
+.cvd-market-stack > .cvd-chart-card:first-child .js-plotly-plot,
+.cvd-market-stack > .cvd-chart-card:first-child .plot-container,
+.cvd-market-stack > .cvd-chart-card:first-child .svg-container { height:235px !important; max-height:235px !important; }
+.cvd-market-stack > .cvd-chart-card:last-child .js-plotly-plot,
+.cvd-market-stack > .cvd-chart-card:last-child .plot-container,
+.cvd-market-stack > .cvd-chart-card:last-child .svg-container { height:185px !important; max-height:185px !important; }
 
 .cvd-chart-card,
 .cvd-indicator-panel,
@@ -140,8 +158,9 @@ CVD_LOCAL_CSS = """
 }
 
 .cvd-indicator-panel {
-    height: 590px;
-    padding: 8px 10px 12px;
+    height: auto;
+    align-self: start;
+    padding: 8px 10px;
     color: #dbe7ef;
     overflow-y: auto;
     box-sizing: border-box;
@@ -240,7 +259,9 @@ CVD_LOCAL_CSS = """
 
 .cvd-analysis-card {
     min-width: 0;
-    min-height: 180px;
+    height: 247px;
+    min-height: 247px;
+    max-height: 247px;
     border: 1px solid #123247;
     border-radius: 4px;
     background: linear-gradient(180deg, #061522 0%, #04111c 100%);
@@ -259,6 +280,23 @@ CVD_LOCAL_CSS = """
     font-weight: 700;
     letter-spacing: .1px;
     box-sizing: border-box;
+}
+
+.cvd-analysis-card-graph {
+    min-width: 0;
+    width: 100%;
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
+    overflow: hidden;
+}
+
+.cvd-analysis-card-graph .js-plotly-plot,
+.cvd-analysis-card-graph .plot-container,
+.cvd-analysis-card-graph .svg-container {
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
 }
 
 @media (max-width: 1200px) {
@@ -311,7 +349,7 @@ CVD_LOCAL_CSS = """
 
 .cvd-analysis-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 314px;
+    grid-template-columns: minmax(0, 1fr) 286px;
     gap: 8px;
     align-items: start;
 }
@@ -328,11 +366,27 @@ CVD_LOCAL_CSS = """
 }
 
 .cvd-summary-panel,
-.cvd-strength-legend {
+.cvd-strength-legend,
+.cvd-analysis-controls {
     border: 1px solid #123247;
     border-radius: 4px;
     background: linear-gradient(180deg, #061522 0%, #04111c 100%);
     overflow: hidden;
+}
+
+.cvd-analysis-controls .cvd-selector-group,
+.cvd-analysis-controls .cvd-indicator-group {
+    border-top: 1px solid #173247;
+    padding: 8px 9px;
+    margin: 0;
+}
+.cvd-analysis-controls .cvd-options-grid,
+.cvd-analysis-controls .cvd-checklist {
+    grid-template-columns: 1fr;
+}
+.cvd-analysis-controls label {
+    color: #d9e8f5;
+    font-size: 9px;
 }
 
 .cvd-summary-title,
@@ -568,7 +622,7 @@ def _checklist(
         value=value,
         className="cvd-checklist",
         persistence="cvd-controls-v1",
-        persistence_type="memory",
+        persistence_type=LOCAL_SELECTION_PERSISTENCE_TYPE,
     )
 
 
@@ -650,59 +704,12 @@ def _indicator_panel() -> html.Div:
                             "textDecoration": "none",
                         },
                     ),
-                    # Legacy callback target kept hidden during migration.
-                    html.Button(
-                        "",
-                        id="cvd-open-analysis",
-                        n_clicks=0,
-                        type="button",
-                        style={"display": "none"},
-                    ),
                 ],
             ),
-            html.Div(
-                "INDICATORS",
-                className="cvd-selector-heading",
-            ),
-            html.Div(
-                "Screen A keeps overlays on CVD. Screen B uses native order-flow analytics "
-                "precomputed by Processing (demo fixture in this contract).",
-                className="cvd-selector-note",
-            ),
+            html.Div("INDICATORS · SCREEN A", className="cvd-selector-heading"),
             _selector_group(
                 "TREND · ON CVD",
-                _checklist(
-                    "cvd-trend-selectors",
-                    TREND_OPTIONS,
-                    DEFAULT_TREND,
-                ),
-            ),
-            _selector_group(
-                "FLOW DYNAMICS · SCREEN B",
-                _checklist(
-                    "cvd-derived-selectors",
-                    DERIVED_OPTIONS,
-                    DEFAULT_DERIVED,
-                ),
-                analysis_only=True,
-            ),
-            _selector_group(
-                "DIVERGENCES · SCREEN B",
-                _checklist(
-                    "cvd-momentum-selectors",
-                    MOMENTUM_OPTIONS,
-                    DEFAULT_MOMENTUM,
-                ),
-                analysis_only=True,
-            ),
-            _selector_group(
-                "REGIME CHANGE · SCREEN B",
-                _checklist(
-                    "cvd-volatility-selectors",
-                    VOLATILITY_OPTIONS,
-                    DEFAULT_VOLATILITY,
-                ),
-                analysis_only=True,
+                _checklist("cvd-trend-selectors", TREND_OPTIONS, DEFAULT_TREND),
             ),
         ],
     )
@@ -715,6 +722,57 @@ def _default_selection() -> dict[str, list[str]]:
         "momentum": list(DEFAULT_MOMENTUM),
         "volatility": list(DEFAULT_VOLATILITY),
     }
+
+
+def _analysis_indicator_controls(selection: Any) -> html.Div:
+    """Expose Screen-B indicator selection beside the analysis summaries.
+
+    Screen A and Screen B are separate routes, so the canonical checklist IDs
+    can be reused safely. Browser-local persistence keeps both views in sync.
+    Trend overlays are intentionally omitted here because they only affect
+    Screen A CVD candles.
+    """
+    payload = resolve_persisted_selection(selection, _default_selection)
+    return html.Div(
+        className="screen-b-selector cvd-analysis-controls",
+        children=[
+            html.Div("INDICATORS · SCREEN B", className="screen-b-selector-title cvd-summary-title"),
+            html.Div(
+                "Select the native Order Flow panels shown on this screen.",
+                className="cvd-selector-note",
+                style={"padding": "8px 9px 0", "marginBottom": "2px"},
+            ),
+            html.Div(
+                style={"padding": "0 9px 9px"},
+                children=[
+                    _selector_group(
+                        "FLOW DYNAMICS",
+                        _checklist(
+                            "cvd-derived-selectors",
+                            DERIVED_OPTIONS,
+                            list(payload.get("derived_analysis", [])),
+                        ),
+                    ),
+                    _selector_group(
+                        "DIVERGENCES",
+                        _checklist(
+                            "cvd-momentum-selectors",
+                            MOMENTUM_OPTIONS,
+                            list(payload.get("momentum", [])),
+                        ),
+                    ),
+                    _selector_group(
+                        "REGIME CHANGE",
+                        _checklist(
+                            "cvd-volatility-selectors",
+                            VOLATILITY_OPTIONS,
+                            list(payload.get("volatility", [])),
+                        ),
+                    ),
+                ],
+            ),
+        ],
+    )
 
 
 def _selection_payload(
@@ -816,33 +874,6 @@ def _source_points(
     ]
 
     return candles, selected
-
-
-def _overlay_series(
-    technical_block: dict[str, Any],
-    indicator_id: str,
-) -> tuple[list[Any], list[Any]]:
-    timestamps = [
-        _dt(value)
-        for value in _safe_list(
-            technical_block.get("timestamps")
-        )
-    ]
-    overlays = _safe_dict(
-        technical_block.get("overlays")
-    )
-
-    if indicator_id.startswith(("ema_", "sma_", "wma_")):
-        series = _safe_dict(
-            _safe_dict(
-                overlays.get("moving_averages")
-            ).get("series")
-        )
-        return timestamps, _safe_list(
-            series.get(indicator_id)
-        )
-
-    return timestamps, []
 
 
 def _add_main_cross_markers(
@@ -1039,7 +1070,7 @@ def _cvd_candlestick_figure(
 
     fig.update_layout(
         title=None,
-        height=350,
+        height=235,
         paper_bgcolor=BG,
         plot_bgcolor=PLOT_BG,
         margin={
@@ -1127,7 +1158,7 @@ def _delta_buy_sell_figure(
     chart: dict[str, Any] | None,
     *,
     timeframe: str | None,
-    height: int = 232,
+    height: int = 185,
 ) -> go.Figure:
     """Render Processing-published Spot/Futures flow as a fast 0–100% read.
 
@@ -1269,6 +1300,7 @@ def _indicator_figure(
                 x=current_x,
                 y=current_y,
                 mode="lines",
+                name=name.replace("_", " ").title(),
                 line={
                     "color": color,
                     "width": 1.15,
@@ -1336,7 +1368,13 @@ def _indicator_figure(
     )
 
     fig.update_xaxes(
-        showticklabels=False,
+        showticklabels=True,
+        tickformat="%H:%M<br>%d/%m",
+        tickfont={"size": 7, "color": MUTED},
+        nticks=5,
+        ticks="outside",
+        ticklen=3,
+        title={"text": "UTC", "font": {"size": 7, "color": MUTED}, "standoff": 2},
         gridcolor=GRID,
         zeroline=False,
     )
@@ -1357,7 +1395,7 @@ def _indicator_figure(
     for trace in fig.data:
         if trace.name and trace.type in {"scatter", "bar"}:
             trace.showlegend = True
-    return apply_analysis_figure_layout(fig)
+    return apply_analysis_figure_layout(fig, height=220)
 
 
 def _selected_analysis_ids(
@@ -1378,6 +1416,35 @@ def _selected_analysis_ids(
         for indicator_id in ANALYSIS_ORDER
         if indicator_id in chosen
     ]
+
+
+def _cvd_signal_color(summary: dict[str, Any]) -> str:
+    raw = str(summary.get("signal_color") or "").strip().lower()
+    if raw.startswith("#") and len(raw) in {4, 7, 9}:
+        return raw
+    semantic = raw or str(summary.get("signal") or "").strip().lower()
+    if semantic in {"positive", "bullish", "buy", "buying", "expanding", "strong"}:
+        return "#20d05c"
+    if semantic in {"negative", "bearish", "sell", "selling", "contracting"}:
+        return "#ff3d55"
+    if semantic in {"neutral", "normal", "mixed", "balanced", "available", "ok"}:
+        return "#ffab00"
+    if semantic in {"unavailable", "missing", "error", "unknown", "—", ""}:
+        return "#59636b"
+    return "#22c7e8"
+
+
+def _cvd_strength_count(value: Any, *, available: bool = True) -> int:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return 3 if available else 0
+    if number <= 0:
+        return 1 if available else 0
+    if number <= 1.0:
+        import math
+        return max(1, min(5, int(math.ceil(number * 5.0))))
+    return max(1, min(5, int(round(number))))
 
 
 def _cvd_strength_dots(count: Any, color: str) -> html.Span:
@@ -1438,7 +1505,11 @@ def _cvd_summary_panel(
             if summary.get("section") != section_id:
                 continue
 
-            signal_color = str(summary.get("signal_color") or "#93a2ad")
+            signal_color = _cvd_signal_color(summary)
+            strength_count = _cvd_strength_count(
+                summary.get("strength"),
+                available=str(summary.get("signal") or "").strip().lower() not in {"", "unavailable", "—"},
+            )
 
             section_rows.append(
                 html.Div(
@@ -1458,7 +1529,7 @@ def _cvd_summary_panel(
                             style={"color": signal_color},
                         ),
                         _cvd_strength_dots(
-                            summary.get("strength"),
+                            strength_count,
                             signal_color,
                         ),
                     ],
@@ -1545,12 +1616,6 @@ def build_analysis_screen(
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
-                                html.Button(
-                                    "",
-                                    id="cvd-back-analysis",
-                                    n_clicks=0,
-                                    style={"display": "none"},
-                                ),
                             ],
                         )
                 ],
@@ -1559,27 +1624,25 @@ def build_analysis_screen(
             ]
         )
 
-    market_sections: list[Any] = []
+    cards: list[Any] = []
 
     for market, title in (
         ("spot", "CVD SPOT"),
         ("futures", "CVD FUTURES / PERPETUALS"),
     ):
-        cards: list[Any] = []
-
         for indicator_id in selected_ids:
             cards.append(
                 html.Div(
-                    className="cvd-analysis-card",
+                    className="screen-b-card cvd-analysis-card",
                     children=[
                         html.Div(
                             contextual_help_label(
-                                INDICATOR_TITLES[indicator_id],
+                                f"{title} · {INDICATOR_TITLES[indicator_id]}",
                                 family="cvd",
                                 section="screen_b",
                                 key=indicator_id,
                             ),
-                            className="cvd-analysis-card-title",
+                            className="screen-b-card-title cvd-analysis-card-title",
                         ),
                         dcc.Graph(
                             figure=_indicator_figure(
@@ -1590,35 +1653,20 @@ def build_analysis_screen(
                             ),
                             config={
                                 "displaylogo": False,
-                                "responsive": True,
+                                "responsive": False,
                             },
+                            className="screen-b-graph cvd-analysis-card-graph",
+                            animate=False,
                             style={
-                                "height": "310px",
-                                "minHeight": "310px",
+                                "height": "220px",
+                                "minHeight": "220px",
+                                "maxHeight": "220px",
                                 "width": "100%",
                             },
                         ),
                     ],
                 )
             )
-
-        market_sections.append(
-            html.Div(
-                className="cvd-analysis-market",
-                children=[
-                    html.Div(
-                        title,
-                        className=(
-                            "cvd-analysis-market-title"
-                        ),
-                    ),
-                    html.Div(
-                        cards,
-                        className="cvd-analysis-grid",
-                    ),
-                ],
-            )
-        )
 
     return html.Div(
         className="cvd-analysis-shell",
@@ -1634,26 +1682,21 @@ def build_analysis_screen(
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
-                                html.Button(
-                                    "",
-                                    id="cvd-back-analysis",
-                                    n_clicks=0,
-                                    style={"display": "none"},
-                                ),
                             ],
                         )
                 ],
             ),
             html.Div(
-                className="cvd-analysis-layout",
+                className="screen-b-layout cvd-analysis-layout",
                 children=[
                     html.Div(
-                        market_sections,
-                        className="cvd-analysis-main",
+                        cards,
+                        className="screen-b-grid cvd-analysis-main cvd-analysis-grid",
                     ),
                     html.Div(
                         className="cvd-summary-column",
                         children=[
+                            _analysis_indicator_controls(selection),
                             _cvd_summary_panel(
                                 _technical_block(contract, "spot", timeframe),
                                 selected_ids,
@@ -1741,8 +1784,9 @@ def _main_candle_grid(
                                     ],
                                 },
                                 style={
-                                    "height": "350px",
-                                    "minHeight": "350px",
+                                    "height": "235px",
+                                    "minHeight": "235px",
+                                    "maxHeight": "235px",
                                     "width": "100%",
                                 },
                             )
@@ -1773,8 +1817,9 @@ def _main_candle_grid(
                                     "responsive": True,
                                 },
                                 style={
-                                    "height": "232px",
-                                    "minHeight": "232px",
+                                    "height": "185px",
+                                    "minHeight": "185px",
+                                    "maxHeight": "185px",
                                     "width": "100%",
                                 },
                             )
@@ -1792,24 +1837,15 @@ def _main_candle_grid(
 
 
 @callback(
-    Output("screen-view", "value", allow_duplicate=True),
-    Input("cvd-back-analysis", "n_clicks", allow_optional=True),
-    prevent_initial_call=True,
-)
-def return_to_cvd_screen_a(clicks: int | None):
-    return "main" if clicks else no_update
-
-
-@callback(
     Output("cvd-spot-candle", "figure"),
     Output("cvd-futures-candle", "figure"),
     Output("cvd-spot-delta", "figure"),
     Output("cvd-futures-delta", "figure"),
-    Input("cvd-trend-selectors", "value"),
+    Input("cvd-trend-selectors", "value", allow_optional=True),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
     Input("url", "search"),
-    prevent_initial_call=True,
+    prevent_initial_call=False,
 )
 def update_cvd_candles(
     trend: list[str] | None,
@@ -1818,7 +1854,7 @@ def update_cvd_candles(
     search: str | None,
 ):
     locale = locale_from_search(search)
-    selected = _unique(trend or [])
+    selected = _unique(DEFAULT_TREND if trend is None else trend)
     contract = load_contract(CONTRACT_FILE)
 
     charts = _safe_dict(
@@ -1852,39 +1888,30 @@ def update_cvd_candles(
 
 @callback(
     Output(SELECTION_STORE_ID, "data"),
-    Output(
-        "screen-view",
-        "value",
-        allow_duplicate=True,
-    ),
-    Input("cvd-trend-selectors", "value"),
-    Input("cvd-derived-selectors", "value"),
-    Input("cvd-momentum-selectors", "value"),
-    Input("cvd-volatility-selectors", "value"),
-    Input("cvd-open-analysis", "n_clicks"),
+    Input("cvd-trend-selectors", "value", allow_optional=True),
+    Input("cvd-derived-selectors", "value", allow_optional=True),
+    Input("cvd-momentum-selectors", "value", allow_optional=True),
+    Input("cvd-volatility-selectors", "value", allow_optional=True),
+    State(SELECTION_STORE_ID, "data"),
     prevent_initial_call=True,
 )
-def persist_cvd_selection_and_open_analysis(
+def persist_cvd_selection(
     trend: list[str] | None,
     derived: list[str] | None,
     momentum: list[str] | None,
     volatility: list[str] | None,
-    open_clicks: int | None,
-):
-    payload = _selection_payload(
-        trend,
-        derived,
-        momentum,
-        volatility,
+    current: Any,
+) -> dict[str, list[str]]:
+    # On Screen B the trend checklist is intentionally absent. None therefore
+    # means "component not mounted" and must retain the stored Screen-A trend
+    # selection; [] still means the user explicitly deselected everything.
+    stored = resolve_persisted_selection(current, _default_selection)
+    return _selection_payload(
+        list(stored.get("trend", [])) if trend is None else trend,
+        list(stored.get("derived_analysis", [])) if derived is None else derived,
+        list(stored.get("momentum", [])) if momentum is None else momentum,
+        list(stored.get("volatility", [])) if volatility is None else volatility,
     )
-
-    if (
-        ctx.triggered_id == "cvd-open-analysis"
-        and open_clicks
-    ):
-        return payload, "analysis"
-
-    return payload, no_update
 
 
 @callback(
@@ -1912,10 +1939,30 @@ def update_cvd_analysis_screen(
             build_analysis_screen(
                 contract,
                 timeframe,
-                selection or _default_selection(),
+                resolve_persisted_selection(selection, _default_selection),
             ),
             locale,
         )
+
+
+def _display_kpis(contract: dict[str, Any]) -> dict[str, Any]:
+    """Return only KPI cards explicitly selected by the CVD layout contract.
+
+    Processing intentionally keeps a richer KPI inventory for downstream analysis,
+    but Screen A should not render every internal metric as a top-level card.  The
+    presentation contract owns the compact top-KPI list.
+    """
+    kpis = _safe_dict(contract.get("kpis"))
+    screen = _safe_dict(contract.get("screen"))
+    layout = _safe_dict(screen.get("layout_contract"))
+    top_ids = layout.get("top_kpis")
+    if not isinstance(top_ids, list) or not top_ids:
+        return kpis
+    return {
+        str(kpi_id): kpis[str(kpi_id)]
+        for kpi_id in top_ids
+        if str(kpi_id) in kpis and isinstance(kpis[str(kpi_id)], dict)
+    }
 
 
 def render(
@@ -1961,7 +2008,7 @@ def render(
             storage_type="local",
         ),
         screen_header(contract),
-        kpi_grid(contract.get("kpis"), help_family="cvd"),
+        kpi_grid(_display_kpis(contract), help_family="cvd"),
         html.Div(
             className="cvd-main-grid",
             children=[

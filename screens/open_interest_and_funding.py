@@ -5,20 +5,20 @@ from typing import Any, Iterable
 from urllib.parse import quote
 
 import plotly.graph_objects as go
-from dash import Input, Output, State, callback, ctx, dcc, html, no_update
+from dash import Input, Output, State, callback, dcc, html
 from plotly.subplots import make_subplots
 
+from screen_core.selection_state import (
+    LOCAL_SELECTION_PERSISTENCE_TYPE,
+    resolve_persisted_selection,
+)
 from screen_core.components import (
-    analysis_grid,
-    contract_warning,
-    nested_table_sections,
     reference_gallery,
     screen_header,
     screen_page,
-    two_column,
 )
 from screen_core.contextual_help import contextual_help_label
-from screen_core.i18n import current_locale, locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
+from screen_core.i18n import locale_context, localize_component_tree, localize_figure, localized_href, locale_from_search
 from screen_core.contract_loader import load_contract
 from screen_core.formatting import compact_number
 from screen_core.figures import apply_analysis_figure_layout
@@ -100,17 +100,6 @@ SCREEN_A_CROSS_GROUPS = {
     "moving_average_cross",
     "channel_cross",
 }
-
-OSCILLATOR_ORDER = (
-    "macd",
-    "rsi",
-    "tsi",
-    "stochastic",
-    "williams_r",
-    "cci",
-    "atr",
-    "wasserstein_distance",
-)
 
 INDICATOR_TITLES = {
     "oi_dynamics": "OI ROC / SLOPE / ACCELERATION",
@@ -358,7 +347,7 @@ OPEN_INTEREST_LOCAL_CSS = """
 
 .oi-analysis-layout {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 314px;
+    grid-template-columns: minmax(0, 1fr) 286px;
     gap: 8px;
     align-items: start;
 }
@@ -372,7 +361,9 @@ OPEN_INTEREST_LOCAL_CSS = """
 
 .oi-analysis-card {
     min-width: 0;
-    min-height: 180px;
+    height: 247px;
+    min-height: 247px;
+    max-height: 247px;
     border: 1px solid #123247;
     border-radius: 4px;
     background: linear-gradient(180deg, #061522 0%, #04111c 100%);
@@ -410,12 +401,24 @@ OPEN_INTEREST_LOCAL_CSS = """
 .oi-analysis-card-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 68px;
-    min-height: 310px;
+    min-height: 220px;
 }
 
 .oi-analysis-card-graph {
     min-width: 0;
-    height: 310px;
+    width: 100%;
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
+    overflow: hidden;
+}
+
+.oi-analysis-card-graph .js-plotly-plot,
+.oi-analysis-card-graph .plot-container,
+.oi-analysis-card-graph .svg-container {
+    height: 220px !important;
+    min-height: 220px !important;
+    max-height: 220px !important;
 }
 
 .oi-analysis-card-values {
@@ -473,6 +476,33 @@ OPEN_INTEREST_LOCAL_CSS = """
 .oi-summary-column {
     display: grid;
     gap: 7px;
+}
+
+.oi-analysis-controls {
+    border: 1px solid #173247;
+    border-radius: 4px;
+    background: #06111d;
+    overflow: hidden;
+    align-self: start;
+}
+.oi-analysis-controls .oi-indicator-group {
+    border-top: 1px solid #173247;
+    padding: 8px 9px;
+    margin: 0;
+}
+.oi-analysis-controls .oi-indicator-group-title {
+    color: #718da3;
+    font-size: 8px;
+    margin-bottom: 6px;
+}
+.oi-analysis-controls .oi-options-grid {
+    grid-template-columns: 1fr;
+    gap: 0;
+}
+.oi-analysis-controls .oi-options-grid label {
+    color: #d9e8f5;
+    font-size: 9px;
+    min-height: 20px;
 }
 
 .oi-summary-panel,
@@ -781,21 +811,6 @@ def _get_kpis(contract: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def _get_moving_average(contract: dict[str, Any], metric_id: str) -> dict[str, Any]:
-    widgets = _safe_dict(contract.get("widgets"))
-    summary = _safe_dict(widgets.get("moving_averages_summary"))
-    values = _safe_dict(summary.get("values"))
-    value = values.get(metric_id)
-
-    return {
-        "metric_id": metric_id,
-        "value": value,
-        "unit": "quote_currency",
-        "status": summary.get("status") or ("available" if value is not None else "unavailable"),
-        "reason": summary.get("reason"),
-    }
-
-
 def _unit_label(unit: Any) -> str:
     if unit == "quote_currency":
         return "USDT"
@@ -933,7 +948,7 @@ def _checklist(component_id: str, options: list[dict[str, str]], values: list[st
         value=values,
         className="oi-options-grid",
         persistence="oi-controls-v2",
-        persistence_type="memory",
+        persistence_type=LOCAL_SELECTION_PERSISTENCE_TYPE,
     )
 
 
@@ -1010,14 +1025,6 @@ def _indicator_panel() -> html.Div:
                             "textDecoration": "none",
                         },
                     ),
-                    # Legacy callback target kept hidden during migration.
-                    html.Button(
-                        "",
-                        id="oi-open-analysis",
-                        n_clicks=0,
-                        type="button",
-                        style={"display": "none"},
-                    ),
                 ],
             ),
             html.Div(
@@ -1042,26 +1049,20 @@ def _indicator_panel() -> html.Div:
                 "BANDS & CHANNELS · ON OPEN INTEREST",
                 _checklist("oi-band-selectors", BAND_OPTIONS, DEFAULT_BANDS),
             ),
-            _selector_group(
-                "PARTICIPATION DYNAMICS · SCREEN B",
-                _checklist(
-                    "oi-derived-selectors",
-                    DERIVED_ANALYSIS_OPTIONS,
-                    DEFAULT_DERIVED_ANALYSIS,
-                ),
-            ),
-            _selector_group(
-                "PRICE × PARTICIPATION · SCREEN B",
-                _checklist("oi-momentum-selectors", MOMENTUM_OPTIONS, DEFAULT_MOMENTUM),
-            ),
-            _selector_group(
-                "LEVERAGE / REGIME CHANGE · SCREEN B",
-                _checklist("oi-volatility-selectors", VOLATILITY_OPTIONS, DEFAULT_VOLATILITY),
-            ),
-            html.Div(
-                _checklist("oi-native-selectors", OPEN_INTEREST_OPTIONS, DEFAULT_OPEN_INTEREST),
-                style={"display": "none"},
-            ),
+        ],
+    )
+
+
+def _analysis_indicator_controls(selection: Any) -> html.Div:
+    payload = resolve_persisted_selection(selection, _default_selection_payload)
+    return html.Div(
+        className="screen-b-selector oi-analysis-controls",
+        children=[
+            html.Div("INDICATORS · SCREEN B", className="screen-b-selector-title oi-summary-title"),
+            _selector_group("PARTICIPATION DYNAMICS", _checklist("oi-derived-selectors", DERIVED_ANALYSIS_OPTIONS, list(payload.get("derived_analysis", [])))),
+            _selector_group("PRICE × PARTICIPATION", _checklist("oi-momentum-selectors", MOMENTUM_OPTIONS, list(payload.get("momentum", [])))),
+            _selector_group("LEVERAGE / REGIME CHANGE", _checklist("oi-volatility-selectors", VOLATILITY_OPTIONS, list(payload.get("volatility", [])))),
+            _selector_group("OPEN INTEREST", _checklist("oi-native-selectors", OPEN_INTEREST_OPTIONS, list(payload.get("open_interest", [])))),
         ],
     )
 
@@ -1080,7 +1081,7 @@ def _selected_ohlcv(
     ohlcv = _safe_dict(charts.get("open_interest_candlestick"))
 
     selected_market = market or str(ohlcv.get("selected_market") or "all_exchanges")
-    selected_timeframe = timeframe or str(ohlcv.get("selected_timeframe") or "1h")
+    selected_timeframe = timeframe or str(ohlcv.get("selected_timeframe") or "15m")
 
     markets = _safe_dict(ohlcv.get("markets"))
     market_block = _safe_dict(markets.get(selected_market))
@@ -1093,7 +1094,7 @@ def _selected_ohlcv(
     timeframe_block = _safe_dict(timeframes.get(selected_timeframe))
 
     if not timeframe_block:
-        selected_timeframe = str(ohlcv.get("selected_timeframe") or next(iter(timeframes), "1h"))
+        selected_timeframe = str(ohlcv.get("selected_timeframe") or next(iter(timeframes), "15m"))
         timeframe_block = _safe_dict(timeframes.get(selected_timeframe))
 
     return timeframe_block, selected_market, selected_timeframe
@@ -1356,174 +1357,6 @@ def _screen_a_cross_events(
         eligible.append(event)
 
     return _select_primary_crosses(eligible)
-
-
-def _add_screen_a_cross_markers_legacy(
-    fig: go.Figure,
-    contract: dict[str, Any],
-    records: list[dict[str, Any]],
-    selected: set[str],
-    market: str,
-    timeframe: str,
-) -> None:
-    """Place contractual bullish/bearish cross arrows on the candlesticks."""
-
-    events = _screen_a_cross_events(
-        contract,
-        market,
-        timeframe,
-        selected,
-    )
-
-    if not events:
-        return
-
-    records_by_timestamp: dict[int, dict[str, Any]] = {}
-
-    for record in records:
-        timestamp = _timestamp_key(record.get("timestamp"))
-        if timestamp is not None:
-            records_by_timestamp[timestamp] = record
-
-    numeric_highs = [
-        float(record["high"])
-        for record in records
-        if isinstance(record.get("high"), (int, float))
-    ]
-    numeric_lows = [
-        float(record["low"])
-        for record in records
-        if isinstance(record.get("low"), (int, float))
-    ]
-
-    if numeric_highs and numeric_lows:
-        visible_price_span = max(numeric_highs) - min(numeric_lows)
-    else:
-        visible_price_span = 0.0
-
-    minimum_offset = max(visible_price_span * 0.008, 1e-9)
-
-    marker_groups: dict[str, dict[str, list[Any]]] = {
-        "bullish": {
-            "x": [],
-            "y": [],
-            "customdata": [],
-        },
-        "bearish": {
-            "x": [],
-            "y": [],
-            "customdata": [],
-        },
-    }
-
-    # Contractual priority normally leaves one arrow per cluster.
-    # Staggering remains as a fallback for different simultaneous clusters.
-    stack_counts: dict[tuple[int, str], int] = {}
-
-    for event in events:
-        timestamp = _timestamp_key(event.get("timestamp"))
-
-        if timestamp is None:
-            continue
-
-        record = records_by_timestamp.get(timestamp)
-
-        # Events outside the currently displayed candle window are ignored.
-        if not record:
-            continue
-
-        high = record.get("high")
-        low = record.get("low")
-
-        if not isinstance(high, (int, float)) or not isinstance(low, (int, float)):
-            continue
-
-        candle_range = abs(float(high) - float(low))
-        base_offset = max(minimum_offset, candle_range * 0.35)
-
-        signal = str(event.get("signal") or "").lower()
-
-        if signal not in {"bullish", "bearish"}:
-            continue
-
-        group_id = signal
-        stack_key = (timestamp, group_id)
-        stack_index = stack_counts.get(stack_key, 0)
-        stack_counts[stack_key] = stack_index + 1
-
-        offset = base_offset * (1.0 + 0.72 * stack_index)
-
-        if signal == "bullish":
-            y_value = float(low) - offset
-        else:
-            y_value = float(high) + offset
-
-        calculation = _safe_dict(event.get("calculation"))
-        first_series = str(calculation.get("first_series") or "")
-        second_series = str(calculation.get("second_series") or "")
-
-        marker_groups[group_id]["x"].append(_utc_datetime(timestamp))
-        marker_groups[group_id]["y"].append(y_value)
-        marker_groups[group_id]["customdata"].append(
-            [
-                str(event.get("label") or event.get("event_id") or "Technical cross"),
-                str(event.get("event_id") or ""),
-                str(event.get("signal") or "").upper(),
-                first_series,
-                second_series,
-            ]
-        )
-
-    marker_specs = {
-        "bullish": {
-            "name": "CRUCE ALCISTA",
-            "symbol": "circle",
-            "color": "#00e59b",
-        },
-        "bearish": {
-            "name": "CRUCE BAJISTA",
-            "symbol": "circle",
-            "color": "#ff4d6d",
-        },
-    }
-
-    for group_id, values in marker_groups.items():
-        if not values["x"]:
-            continue
-
-        specification = marker_specs[group_id]
-
-        fig.add_trace(
-            go.Scatter(
-                x=values["x"],
-                y=values["y"],
-                mode="markers",
-                name=specification["name"],
-                legendgroup=f"screen-a-cross-{group_id}",
-                marker={
-                    "symbol": specification["symbol"],
-                    "size": 13,
-                    "color": specification["color"],
-                    "line": {
-                        "width": 1,
-                        "color": "#03101a",
-                    },
-                },
-                customdata=values["customdata"],
-                cliponaxis=False,
-                hovertemplate=(
-                    "<b>%{customdata[0]}</b>"
-                    "<br>Evento: %{customdata[1]}"
-                    "<br>Signal: %{customdata[2]}"
-                    "<br>Serie 1: %{customdata[3]}"
-                    "<br>Serie 2: %{customdata[4]}"
-                    "<br>%{x|%Y-%m-%d %H:%M UTC}"
-                    "<extra></extra>"
-                ),
-            ),
-            row=1,
-            col=1,
-        )
 
 
 # -----------------------------------------------------------------------------
@@ -1900,6 +1733,7 @@ def build_open_interest_figure(
     )
 
     x = [_utc_datetime(record.get("timestamp")) for record in records]
+    x_padding = (x[-1] - x[-2]) / 2 if len(x) > 1 else None
     open_values = [record.get("open") for record in records]
     high_values = [record.get("high") for record in records]
     low_values = [record.get("low") for record in records]
@@ -1972,6 +1806,7 @@ def build_open_interest_figure(
         nticks=7,
         tickformat="%b %d<br>%H:%M",
         automargin=True,
+        range=[x[0] - x_padding, x[-1] + x_padding] if x_padding is not None else None,
     )
     fig.update_yaxes(
         showgrid=True,
@@ -2615,6 +2450,7 @@ def _analysis_figure(
                 go.Bar(
                     x=current_x,
                     y=current_y,
+                    name="HISTOGRAM",
                     marker_color=[
                         "#22c868" if value is not None and value >= 0 else "#ff4c43"
                         for value in current_y
@@ -2631,6 +2467,7 @@ def _analysis_figure(
             x=current_x,
             y=current_y,
             mode="lines",
+            name=SERIES_LABELS.get(series_name, series_name.replace("_", " ").upper()),
             line={
                 "color": ANALYSIS_LINE_COLORS.get(color_key, "#22c7e8"),
                 "width": 1.25,
@@ -2702,7 +2539,13 @@ def _analysis_figure(
     fig.update_xaxes(
         showgrid=False,
         zeroline=False,
-        showticklabels=False,
+        showticklabels=True,
+        tickformat="%H:%M<br>%d/%m",
+        tickfont={"size": 7, "color": "#83949f"},
+        nticks=5,
+        ticks="outside",
+        ticklen=3,
+        title={"text": "UTC", "font": {"size": 7, "color": "#718593"}, "standoff": 2},
         linecolor="#173247",
         fixedrange=True,
         **(
@@ -2737,7 +2580,7 @@ def _analysis_figure(
     for trace in fig.data:
         if trace.name and trace.type in {"scatter", "bar"}:
             trace.showlegend = True
-    return apply_analysis_figure_layout(fig, right_margin=42)
+    return apply_analysis_figure_layout(fig, height=220, right_margin=42)
 
 
 def _analysis_value_rows(
@@ -2824,10 +2667,10 @@ def _analysis_card(
     title = INDICATOR_TITLES.get(indicator_id, indicator_id.upper())
 
     return html.Div(
-        className="oi-analysis-card",
+        className="screen-b-card oi-analysis-card",
         children=[
             html.Div(
-                className="oi-analysis-card-header",
+                className="screen-b-card-title oi-analysis-card-header",
                 children=[
                     contextual_help_label(
                         f"{number}. {title}",
@@ -2837,25 +2680,12 @@ def _analysis_card(
                     ),
                 ],
             ),
-            html.Div(
-                className="oi-analysis-card-body",
-                children=[
-                    dcc.Graph(
-                        figure=_analysis_figure(
-                            contract,
-                            indicator_id,
-                            panel,
-                            market,
-                            timeframe,
-                        ),
-                        config={"displayModeBar": False, "displaylogo": False, "responsive": True},
-                        className="oi-analysis-card-graph",
-                    ),
-                    html.Div(
-                        _analysis_value_rows(indicator_id, panel, row),
-                        className="oi-analysis-card-values",
-                    ),
-                ],
+            dcc.Graph(
+                figure=_analysis_figure(contract, indicator_id, panel, market, timeframe),
+                config={"displayModeBar": False, "displaylogo": False, "responsive": False},
+                animate=False,
+                className="screen-b-graph oi-analysis-card-graph",
+                style={"height": "220px", "minHeight": "220px", "maxHeight": "220px", "width": "100%"},
             ),
         ],
     )
@@ -2977,7 +2807,7 @@ def build_analysis_screen(
 
     if selected_ids:
         chart_area: Any = html.Div(
-            className="oi-analysis-grid",
+            className="screen-b-grid oi-analysis-grid",
             children=[
                 _analysis_card(
                     contract,
@@ -3009,23 +2839,18 @@ def build_analysis_screen(
                                     className="analysis-back-button",
                                     style={"textDecoration": "none"},
                                 ),
-                                html.Button(
-                                    "",
-                                    id="oi-back-analysis",
-                                    n_clicks=0,
-                                    style={"display": "none"},
-                                ),
                             ],
                         )
                 ],
             ),
             html.Div(
-                className="oi-analysis-layout",
+                className="screen-b-layout oi-analysis-layout",
                 children=[
                     chart_area,
                     html.Div(
                         className="oi-summary-column",
                         children=[
+                            _analysis_indicator_controls(selection),
                             _summary_panel(contract, selected_market, selected_timeframe),
                             _strength_legend(),
                         ],
@@ -3037,14 +2862,6 @@ def build_analysis_screen(
 
 
 
-@callback(
-    Output("screen-view", "value", allow_duplicate=True),
-    Input("oi-back-analysis", "n_clicks", allow_optional=True),
-    prevent_initial_call=True,
-)
-def return_to_oi_screen_a(clicks: int | None):
-    return "main" if clicks else no_update
-
 # -----------------------------------------------------------------------------
 # Dash callbacks
 # -----------------------------------------------------------------------------
@@ -3054,15 +2871,15 @@ def return_to_oi_screen_a(clicks: int | None):
     Output("oi-main-graph", "figure"),
     Input("oi-trend-selectors", "value"),
     Input("oi-band-selectors", "value"),
-    Input("oi-derived-selectors", "value"),
-    Input("oi-momentum-selectors", "value"),
-    Input("oi-volatility-selectors", "value"),
-    Input("oi-native-selectors", "value"),
+    Input("oi-derived-selectors", "value", allow_optional=True),
+    Input("oi-momentum-selectors", "value", allow_optional=True),
+    Input("oi-volatility-selectors", "value", allow_optional=True),
+    Input("oi-native-selectors", "value", allow_optional=True),
     Input("market-selector", "value"),
     Input("timeframe-selector", "value"),
     Input("reload-json", "n_clicks"),
     Input("url", "search"),
-    prevent_initial_call=True,
+    prevent_initial_call=False,
 )
 def update_open_interest_figure(
     trend_values: list[str] | None,
@@ -3088,38 +2905,33 @@ def update_open_interest_figure(
 
 @callback(
     Output(SELECTION_STORE_ID, "data"),
-    Output("screen-view", "value", allow_duplicate=True),
-    Input("oi-trend-selectors", "value"),
-    Input("oi-band-selectors", "value"),
-    Input("oi-derived-selectors", "value"),
-    Input("oi-momentum-selectors", "value"),
-    Input("oi-volatility-selectors", "value"),
-    Input("oi-native-selectors", "value"),
-    Input("oi-open-analysis", "n_clicks"),
+    Input("oi-trend-selectors", "value", allow_optional=True),
+    Input("oi-band-selectors", "value", allow_optional=True),
+    Input("oi-derived-selectors", "value", allow_optional=True),
+    Input("oi-momentum-selectors", "value", allow_optional=True),
+    Input("oi-volatility-selectors", "value", allow_optional=True),
+    Input("oi-native-selectors", "value", allow_optional=True),
+    State(SELECTION_STORE_ID, "data"),
     prevent_initial_call=True,
 )
-def persist_open_interest_selection_and_open_analysis(
+def persist_open_interest_selection(
     trend_values: list[str] | None,
     band_values: list[str] | None,
     derived_values: list[str] | None,
     momentum_values: list[str] | None,
     volatility_values: list[str] | None,
     native_values: list[str] | None,
-    open_clicks: int | None,
-) -> tuple[dict[str, list[str]], Any]:
-    payload = _selection_payload(
-        trend_values,
-        band_values,
-        derived_values,
-        momentum_values,
-        volatility_values,
-        native_values,
+    current: Any,
+) -> dict[str, list[str]]:
+    stored = resolve_persisted_selection(current, _default_selection_payload)
+    return _selection_payload(
+        list(stored.get("trend", [])) if trend_values is None else trend_values,
+        list(stored.get("bands", [])) if band_values is None else band_values,
+        list(stored.get("derived_analysis", [])) if derived_values is None else derived_values,
+        list(stored.get("momentum", [])) if momentum_values is None else momentum_values,
+        list(stored.get("volatility", [])) if volatility_values is None else volatility_values,
+        list(stored.get("open_interest", [])) if native_values is None else native_values,
     )
-
-    if ctx.triggered_id == "oi-open-analysis" and open_clicks:
-        return payload, "analysis"
-
-    return payload, no_update
 
 
 @callback(
@@ -3146,7 +2958,7 @@ def update_analysis_screen(
                 contract,
                 market,
                 timeframe,
-                selection or _default_selection_payload(),
+                resolve_persisted_selection(selection, _default_selection_payload),
             ),
             locale,
         )

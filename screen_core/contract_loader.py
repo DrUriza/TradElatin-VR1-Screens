@@ -2,128 +2,51 @@ from __future__ import annotations
 
 import json
 from functools import lru_cache
+import os
 from pathlib import Path
 from typing import Any
 
 BASE_DIR = Path(__file__).resolve().parents[1]
-CONTRACT_DIR = BASE_DIR / "data" / "contracts"
+CONTRACT_DIR = Path(os.getenv("TRADELATIN_CONTRACT_DIR", "").strip()) if os.getenv("TRADELATIN_CONTRACT_DIR", "").strip() else BASE_DIR / "data" / "contracts"
 
-# Canonical screen contract filenames remain stable inside the HMI, but the
-# runtime producer may publish shorter family-oriented filenames.  Keep the
-# resolver deterministic and integration-friendly: explicit runtime aliases
-# first, then the canonical golden/reference filename, then one unambiguous
-# family-prefix match.
-CONTRACT_ALIASES: dict[str, tuple[str, ...]] = {
-    "prices_VR1_FINAL.json": (
-        "prices.json",
-        "price.json",
-    ),
-    "cvd_volume_orderflow_VR1_FINAL.json": (
-        "cvd.json",
-        "cvd_orderflow.json",
-        "cvd_volume_orderflow.json",
-    ),
-    "open_interest_and_funding_VR1_FINAL.json": (
-        "open_interest.json",
-        "open_interest_funding.json",
-        "oi.json",
-        "oi_funding.json",
-    ),
-    "etf_exchange_flows_VR1_FINAL.json": (
-        "etf.json",
-        "etf_flows.json",
-        "etf_exchange_flows.json",
-    ),
-    "on_chain_miners_VR1_FINAL.json": (
-        "miners.json",
-        "miner.json",
-        "on_chain.json",
-        "on_chain_miners.json",
-    ),
-    "volatility_market_regimes_VR1_FINAL.json": (
-        "volatility.json",
-        "volatility_regimes.json",
-        "volatility_market_regimes.json",
-    ),
-    "long_short_liquidations_VR1_FINAL.json": (
-        "liquidations.json",
-        "liquidation.json",
-        "long_short_liquidations.json",
-    ),
-    "liquidity_microstructure_VR1_FINAL.json": (
-        "liquidity.json",
-        "liquidity_microstructure.json",
-    ),
-}
+CVD_ALLOWED_TIMEFRAMES = ("5m", "15m", "4h")
 
-
-def _normalized_stem(filename: str) -> str:
-    stem = Path(filename).stem.lower().replace("-", "_").replace(" ", "_")
-    while "__" in stem:
-        stem = stem.replace("__", "_")
-    return stem.strip("_")
-
-
-def _family_prefixes(filename: str) -> tuple[str, ...]:
-    aliases = CONTRACT_ALIASES.get(filename, ())
-    names = (filename, *aliases)
-    prefixes: list[str] = []
-    for name in names:
-        stem = _normalized_stem(name)
-        # Remove release suffixes from the canonical name so files such as
-        # prices_runtime.json or cvd_latest.json can still be resolved.
-        stem = stem.removesuffix("_vr1_final")
-        if stem and stem not in prefixes:
-            prefixes.append(stem)
-    return tuple(prefixes)
-
-
-def resolve_contract_path(filename: str) -> Path:
-    """Resolve a canonical contract request to an existing JSON file.
-
-    Resolution order is intentionally strict and debuggable:
-      1. explicit short/runtime family aliases (for example ``prices.json``);
-      2. exact canonical golden/reference filename;
-      3. exactly one JSON whose normalized stem starts with a known family
-         prefix (for example ``prices_runtime.json``).
-
-    Runtime aliases intentionally take priority over the bundled golden fixture
-    when both exist, so Processing can publish ``prices.json`` without forcing
-    Screens to rename or delete ``prices_VR1_FINAL.json``.
-
-    Ambiguous prefix matches raise instead of silently choosing a file.
-    """
-    for alias in CONTRACT_ALIASES.get(filename, ()):
-        candidate = CONTRACT_DIR / alias
-        if candidate.exists():
-            return candidate
-
-    exact = CONTRACT_DIR / filename
-    if exact.exists():
-        return exact
-
-    prefixes = _family_prefixes(filename)
-    matches: list[Path] = []
-    if CONTRACT_DIR.exists():
-        for candidate in CONTRACT_DIR.glob("*.json"):
-            stem = _normalized_stem(candidate.name)
-            if any(stem == prefix or stem.startswith(f"{prefix}_") for prefix in prefixes):
-                matches.append(candidate)
-
-    if len(matches) == 1:
-        return matches[0]
-    if len(matches) > 1:
-        names = ", ".join(sorted(item.name for item in matches))
-        raise FileNotFoundError(
-            f"Ambiguous contract for {filename!r} in {CONTRACT_DIR}: {names}. "
-            "Keep one family file or use a preferred alias such as prices.json/cvd.json."
+def _validate_family_contract(payload: dict[str, Any], path: Path) -> None:
+    """Reject stale family contracts that would reintroduce removed UI states."""
+    screen = payload.get("screen") if isinstance(payload.get("screen"), dict) else {}
+    family = payload.get("family") or screen.get("family") or screen.get("id")
+    if family != "cvd_volume_orderflow":
+        return
+    selectors = payload.get("selectors") if isinstance(payload.get("selectors"), dict) else {}
+    timeframe = selectors.get("timeframe") if isinstance(selectors.get("timeframe"), dict) else {}
+    options = timeframe.get("options") if isinstance(timeframe, dict) else []
+    values = []
+    if isinstance(options, list):
+        for item in options:
+            if isinstance(item, dict):
+                value = item.get("id") or item.get("value") or item.get("key") or item.get("label")
+            else:
+                value = item
+            if value is not None:
+                values.append(str(value))
+    if values and tuple(values) != CVD_ALLOWED_TIMEFRAMES:
+        raise ValueError(
+            f"Stale CVD contract timeframes in {path}: {values}; expected {list(CVD_ALLOWED_TIMEFRAMES)}"
+        )
+    context = payload.get("context") if isinstance(payload.get("context"), dict) else {}
+    available = context.get("available_timeframes") or context.get("timeframes")
+    if isinstance(available, list) and tuple(str(item) for item in available) != CVD_ALLOWED_TIMEFRAMES:
+        raise ValueError(
+            f"Stale CVD context timeframes in {path}: {available}; expected {list(CVD_ALLOWED_TIMEFRAMES)}"
         )
 
-    aliases = ", ".join(CONTRACT_ALIASES.get(filename, ())) or "none"
-    raise FileNotFoundError(
-        f"Contract not found for {filename!r} in {CONTRACT_DIR}. "
-        f"Accepted aliases: {aliases}"
-    )
+# Screen consumes exactly the canonical filename requested by each family.
+# No aliases, prefix guessing, or fallback fixtures are allowed in integration.
+def resolve_contract_path(filename: str) -> Path:
+    path = CONTRACT_DIR / filename
+    if not path.is_file():
+        raise FileNotFoundError(f"Contract not found: {path}")
+    return path
 
 
 @lru_cache(maxsize=32)
@@ -134,6 +57,7 @@ def _load_cached(path_text: str, modified_ns: int, size: int) -> dict[str, Any]:
         payload = json.load(handle)
     if not isinstance(payload, dict):
         raise ValueError(f"Screen contract must be a JSON object: {path}")
+    _validate_family_contract(payload, path)
     return payload
 
 
