@@ -9,6 +9,8 @@ repository can replace them through `TRADELATIN_CONTRACT_DIR`.
 
 - `TRADELATIN_CONTRACT_DIR`: directory containing the eight final JSON contracts. Default: `./data/contracts`.
 - `TRADELATIN_REFRESH_DIR`: directory where manual refresh requests are written. Default: `./data/refresh_requests`.
+- `TRADELATIN_SOURCE_CONTROL_PATH`: shared HMI source-selection JSON.
+- `TRADELATIN_SOURCE_STATUS_DIR`: shared Processing source-status directory.
 - `TRADELATIN_HOST`: default `127.0.0.1`.
 - `TRADELATIN_PORT`: default `8002`.
 
@@ -21,6 +23,11 @@ Automatic UI reread policy:
 CVD timeframes: `5m`, `15m`, `4h` only. Screen rejects stale CVD contracts outside this set.
 
 OI, ETF, On-Chain, Volatility and Liquidations use the manual Reload button.
+
+The header source control exposes desired `LIVE` and `SYNTHETIC` modes. Its
+separate badge reports the actual `LIVE`, `HYBRID`, `SYNTHETIC FALLBACK` or
+`VALIDATING` state and provider details. Screen never contacts providers; it
+publishes the selection and renders Processing status.
 
 ## Run
 
@@ -48,6 +55,8 @@ navigation and browser refreshes until the user changes it.
 - On-Chain and Volatility right summaries are current-state snapshots; 7D/30D changes historical charts only.
 - Liquidations Screen B consumes the 1D/7D/30D range selector and reports when the requested window exceeds the frozen 500×15m history available in the contract.
 - While a manual family is updating, contract-completion polling runs every 250 ms.
+- Contextual Help uses one persistent overlay outside refreshed card trees, so
+  an open description does not blink or remount during contract refresh.
 
 
 ## Grok Radar

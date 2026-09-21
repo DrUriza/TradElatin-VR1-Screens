@@ -10,7 +10,8 @@ from dash import Dash, Input, Output, State, ctx, dcc, html, no_update
 
 from screen_core.contract_loader import active_badges, contract_revision, load_contract, screen_metadata, selector_spec
 from screen_core.formatting import format_timestamp
-from screen_core.refresh import FAMILY_AUTO_REFRESH_MS, refresh_timeout_seconds, request_family_refresh_async
+from screen_core.refresh import FAMILY_AUTO_REFRESH_MS, refresh_timeout_seconds, request_family_refresh_async, request_source_mode_async
+from screen_core.source_control import aggregate_source_status, read_source_control
 from screen_core.i18n import (
     locale_context,
     locale_from_search,
@@ -177,7 +178,7 @@ def selector_box(label: str, component_id: str) -> html.Div:
     )
 
 
-def selector_buttons(label: str, component_id: str) -> html.Div:
+def selector_buttons(label: str, component_id: str, *, options: list[dict[str, str]] | None = None, value: str | None = None) -> html.Div:
     """Compact temporal selector rendered directly in the family header."""
     return html.Div(
         id=f'{component_id}-box',
@@ -186,8 +187,8 @@ def selector_buttons(label: str, component_id: str) -> html.Div:
             html.Span(label, id=f'{component_id}-label', className='header-control-label'),
             dcc.RadioItems(
                 id=component_id,
-                options=[],
-                value=None,
+                options=options or [],
+                value=value,
                 className='header-radio-selector',
                 inline=True,
             ),
@@ -290,7 +291,7 @@ app = Dash(
     assets_ignore=r"^i18n_runtime\.js$",
 )
 server = app.server
-SCREEN_BUILD_ID = os.getenv("TRADELATIN_SCREEN_BUILD_ID", "V4.2_FINAL_R10_GROK_RADAR_HF3.1")
+SCREEN_BUILD_ID = os.getenv("TRADELATIN_SCREEN_BUILD_ID", "V4.2_FINAL_R10_GROK_RADAR_HF3.2")
 
 
 @server.route("/__tradelatin__/health", methods=["GET"])
@@ -322,6 +323,7 @@ def _language_switch() -> html.Div:
 
 
 def serve_layout() -> html.Div:
+    desired_source = read_source_control()["requested_mode"]
     return html.Div(
         className='app-shell',
                 children=[
@@ -338,6 +340,7 @@ def serve_layout() -> html.Div:
                 n_intervals=0,
                 disabled=True,
             ),
+            dcc.Interval(id='source-status-poll', interval=1_000, n_intervals=0, disabled=False),
             dcc.Store(id='refresh-state', storage_type='memory', data={'status': 'idle'}),
             html.Button('', id='reload-json', n_clicks=0, style={'display': 'none'}),
             html.Header(
@@ -371,7 +374,7 @@ def serve_layout() -> html.Div:
                     html.Div(
                         [
                             _language_switch(),
-                            html.Span('DEMO', className='status-badge status-warning'),
+                            html.Span('SYNTHETIC', id='source-effective-badge', className='status-badge status-warning source-effective-badge'),
                         ],
                         className='topbar-status language-topbar-group',
                         style={'flex': '0 0 auto'},
@@ -402,6 +405,7 @@ def serve_layout() -> html.Div:
                             html.Div(
                                 className='compact-family-controls',
                                 children=[
+                                    selector_buttons('SOURCE','source-mode-selector',options=[{'label':'SYNTHETIC','value':'synthetic'},{'label':'LIVE','value':'live'}],value=desired_source),
                                     selector_buttons('MARKET', 'market-selector'),
                                     selector_buttons('TIMEFRAME', 'timeframe-selector'),
                                     selector_buttons('TIMEFRAME', 'range-selector'),
@@ -451,6 +455,19 @@ def serve_layout() -> html.Div:
 
 
 app.layout = serve_layout()
+
+@app.callback(Output('source-mode-selector','options'), Input('url','search'))
+def localize_source_options(search):
+    locale=locale_from_search(search); return [{'label':tr('SYNTHETIC',locale),'value':'synthetic'},{'label':tr('LIVE',locale),'value':'live'}]
+
+@app.callback(Output('source-effective-badge','children'),Output('source-effective-badge','className'),Output('source-effective-badge','title'),Input('source-status-poll','n_intervals'),Input('source-mode-selector','value'))
+def sync_source_status(_ticks,_selected):
+    status=aggregate_source_status(); effective=str(status['effective_mode']); labels={'live':'LIVE','hybrid':'HYBRID','synthetic':'SYNTHETIC','synthetic_fallback':'SYNTHETIC FALLBACK','validating':'VALIDATING'}
+    level='ok' if effective=='live' else ('warning' if effective in {'hybrid','synthetic','validating'} else 'danger')
+    providers=', '.join(f"{name.upper()}: {state.replace('_',' ')}" for name,state in status['providers'].items())
+    detail=f"Requested: {status['requested_mode'].upper()} · Effective: {labels.get(effective,effective.upper())} · Families: {status['completed_families']}/{status['total_families']} · {providers}"
+    if status['reasons']: detail += ' · Fallback: ' + ' | '.join(status['reasons'][:4])
+    return labels.get(effective,effective.upper()),f'status-badge status-{level} source-effective-badge',detail
 
 
 @app.callback(
@@ -722,6 +739,7 @@ def sync_refresh_policy(pathname: str | None) -> tuple[dict[str, Any], bool, int
     Input('auto-refresh', 'n_intervals'),
     Input('manual-reload', 'n_clicks'),
     Input('refresh-poll', 'n_intervals'),
+    Input('source-mode-selector', 'value'),
     State('url', 'pathname'),
     State('reload-json', 'n_clicks'),
     State('refresh-state', 'data'),
@@ -731,16 +749,24 @@ def orchestrate_family_refresh(
     _auto_ticks: int | None,
     _manual_clicks: int | None,
     _poll_ticks: int | None,
+    selected_source: str | None,
     pathname: str | None,
     current_signal: int | None,
     refresh_state: dict[str, Any] | None,
 ) -> tuple[Any, dict[str, Any], bool]:
     module = get_screen(pathname)
+    trigger = ctx.triggered_id
+    if trigger == 'source-mode-selector':
+        requested=str(selected_source or 'synthetic').lower()
+        if requested not in {'live','synthetic'}: return no_update,refresh_state or {'status':'idle'},True
+        contract_file=module.CONTRACT_FILE if _module_uses_contract(module) else ''; baseline=contract_revision(contract_file) if contract_file else 'static'
+        dispatch=request_source_mode_async(requested_mode=requested,contract_file=contract_file)
+        if not dispatch.configured or not contract_file: return no_update,{'status':'idle','reason':'source_mode'},True
+        return no_update,{'status':'updating','family':FAMILY_KEY_BY_ROUTE.get(module.ROUTE),'route':module.ROUTE,'contract_file':contract_file,'baseline_revision':baseline,'started_at':time.time(),'reason':'source_mode','request_id':dispatch.request_id},False
     if not _module_uses_contract(module):
         return no_update, {'status': 'idle'}, True
     family = FAMILY_KEY_BY_ROUTE.get(module.ROUTE, module.ROUTE.strip('/') or 'prices')
     state = refresh_state if isinstance(refresh_state, dict) else {'status': 'idle'}
-    trigger = ctx.triggered_id
 
     if trigger == 'auto-refresh':
         # Do not overwrite an explicit manual-refresh transaction while its

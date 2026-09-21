@@ -133,6 +133,8 @@ def contextual_help_label(
     return html.Span(
         className=f"context-help-anchor {wrapper_class}".strip(),
         tabIndex=0,
+        role="button",
+        **{"aria-expanded": "false", "aria-haspopup": "dialog"},
         children=[
             label_node,
             html.Span("i", className="context-help-icon"),
