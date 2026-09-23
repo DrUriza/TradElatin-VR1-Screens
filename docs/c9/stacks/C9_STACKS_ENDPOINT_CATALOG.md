@@ -88,27 +88,27 @@ Milestone 1.
 
 ### C9 CORE / NATIVE
 
-| Logical source ID | Purpose | C9 observable ownership | Possible consuming C1-C8 families | Semantic restriction | Status |
-| --- | --- | --- | --- | --- | --- |
-| `sbtc_token_supply` | Provide the source surface for total supply, supply change, net issuance, and technically supported reconciliation context | C9.1 | Not frozen; C9-owned | Direct and derived values must remain distinguishable and source-supported | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_bridge_deposits` | Represent BTC→sBTC deposit operations, amounts, counts, and supported lifecycle context | C9.2; operational context for C9.3 when applicable | Not frozen; C9-owned | Deposit direction and lifecycle states must preserve validated bridge semantics | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_bridge_withdrawals` | Represent sBTC→BTC withdrawal operations, amounts, counts, and supported lifecycle context | C9.2; operational context for C9.3 when applicable | Not frozen; C9-owned | Withdrawal direction, fulfillment, and lifecycle states must preserve validated bridge semantics | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_bridge_limits` | Represent withdrawal capacity, limits, or related bridge constraints where exposed by validated sources | C9.3 | Not frozen; C9-owned | Limits must be reported with source, unit, scope, and observation time | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_bridge_chainstate` | Provide chain-state and bridge operational context needed to interpret operation status and settlement | C9.3 | Not frozen; C9-owned | Chain observations must not be converted by Screen into predictions or inferred finality | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_signer_state` | Represent source-supported signer or registry operational state relevant to bridge operation | C9.3 | Not frozen; C9-owned | Must expose only validated public state and preserve provenance; no unsupported signer-health inference | PROPOSED / NOT IMPLEMENTED |
+| Logical source ID | Type | Purpose | C9 observable ownership / relationship | Possible consuming C1-C8 families | Semantic restriction | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sbtc_token_supply` | CORE | Provide the source surface for total supply, supply change, net issuance, and technically supported reconciliation context | C9.1 | C5 | Direct and derived values must remain distinguishable and source-supported | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_deposits` | CORE | Represent BTC→sBTC deposit operations, amounts, counts, and supported lifecycle context | C9.2; C9.3 where applicable | C4, C5, C6 | Deposit direction and lifecycle states must preserve validated bridge semantics | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_withdrawals` | CORE | Represent sBTC→BTC withdrawal operations, amounts, counts, and supported lifecycle context | C9.2; C9.3 where applicable | C4, C5, C6 | Withdrawal direction, fulfillment, and lifecycle states must preserve validated bridge semantics | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_limits` | CORE | Represent withdrawal capacity, limits, or related bridge constraints where exposed by validated sources | C9.3 | C4, C6 | Limits must be reported with source, unit, scope, and observation time | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_chainstate` | CORE | Provide chain-state and bridge operational context needed to interpret operation status and settlement | C9.3 | C4, C5, C6 | Chain observations must not be converted by Screen into predictions or inferred finality | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_signer_state` | CORE | Represent source-supported signer or registry operational state relevant to bridge operation | C9.3 | C5, C6 | Must expose only validated public state and preserve provenance; no unsupported signer-health inference | PROPOSED / NOT IMPLEMENTED |
 
 ### C9 TRANSVERSAL
 
-| Logical source ID | Purpose | C9 observable ownership | Possible consuming C1-C8 families | Semantic restriction | Status |
-| --- | --- | --- | --- | --- | --- |
-| `sbtc_ft_transfers` | Represent normalized sBTC fungible-token transfer activity for flow and on-chain context | C9 transversal source surface | C2, C5 | Transfers are not CVD; buyer/seller/aggressor semantics require validated market evidence | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_holder_distribution` | Represent source-supported holder counts, balances, or concentration distributions | C9 transversal source surface | C5 | Holder metrics must retain address/entity limitations and must not imply verified beneficial ownership | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_dex_trades` | Represent validated sBTC DEX executions for price, signed-flow, and liquidity context | C9 transversal source surface | C1, C2, C8 | CVD or aggressor labels may be used only when trade direction semantics can be established correctly | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_amm_pool_state` | Represent sBTC AMM pool reserves, state, swaps, slippage, and price-impact context | C9 transversal source surface | C1, C8 | AMM liquidity must not be presented as order-book depth | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_lending_market_state` | Represent validated lending, borrowing, utilization, and rate context for sBTC markets | C9 transversal source surface | C3, C6 | Lending metrics must not be labeled Open Interest or Funding | PROPOSED / NOT IMPLEMENTED |
-| `sbtc_protocol_liquidations` | Represent protocol-specific Stacks DeFi/lending liquidation events after source validation | C9 transversal source surface | C6, C7 | Protocol liquidations must remain distinct from derivatives liquidations | PROPOSED / NOT IMPLEMENTED |
-| `stacks_fee_state` | Represent Stacks fee conditions relevant to bridge and network operational context | C9 transversal source surface | C6 | Fees require explicit units, time basis, source, and must not be mislabeled as market volatility | PROPOSED / NOT IMPLEMENTED |
-| `stacks_mempool_activity` | Represent source-supported pending transaction and congestion context | C9 transversal source surface | C6 | Mempool activity is operational context, not confirmed activity or a prediction | PROPOSED / NOT IMPLEMENTED |
+| Logical source ID | Type | Purpose | C9 observable ownership / relationship | Possible consuming C1-C8 families | Semantic restriction | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| `sbtc_ft_transfers` | TRANSVERSAL | Represent normalized sBTC fungible-token transfer activity for flow and on-chain context | C9 transversal source surface | C2, C5 | Transfers are not CVD; buyer/seller/aggressor semantics require validated market evidence | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_holder_distribution` | TRANSVERSAL | Represent source-supported holder counts, balances, or concentration distributions | C9 transversal source surface | C5 | Holder metrics must retain address/entity limitations and must not imply verified beneficial ownership | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_dex_trades` | TRANSVERSAL | Represent validated sBTC DEX executions for price, signed-flow, and liquidity context | C9 transversal source surface | C1, C2, C8 | CVD or aggressor labels may be used only when trade direction semantics can be established correctly | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_amm_pool_state` | TRANSVERSAL | Represent sBTC AMM pool reserves, state, swaps, slippage, and price-impact context | C9 transversal source surface | C1, C8 | AMM liquidity must not be presented as order-book depth | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_lending_market_state` | TRANSVERSAL | Represent validated lending, borrowing, utilization, and rate context for sBTC markets | C9 transversal source surface | C3, C6 | Lending metrics must not be labeled Open Interest or Funding | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_protocol_liquidations` | TRANSVERSAL | Represent protocol-specific Stacks DeFi/lending liquidation events after source validation | C9 transversal source surface | C6, C7 | Protocol liquidations must remain distinct from derivatives liquidations | PROPOSED / NOT IMPLEMENTED |
+| `stacks_fee_state` | TRANSVERSAL | Represent Stacks fee conditions relevant to bridge and network operational context | C9 transversal source surface | C6 | Fees require explicit units, time basis, source, and must not be mislabeled as market volatility | PROPOSED / NOT IMPLEMENTED |
+| `stacks_mempool_activity` | TRANSVERSAL | Represent source-supported pending transaction and congestion context | C9 transversal source surface | C6 | Mempool activity is operational context, not confirmed activity or a prediction | PROPOSED / NOT IMPLEMENTED |
 
 ## 4. Proposed transversal source surface
 

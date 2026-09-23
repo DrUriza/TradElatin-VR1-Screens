@@ -86,6 +86,8 @@ Flow, and sBTC Bridge Operational State. A separate proposed transversal source
 surface describes how future C9 observables may provide context to C1-C8 without
 changing ownership or metric semantics.
 
+The shared pre-implementation C9 catalog contains 14 proposed logical source surfaces: 6 Core and 8 transversal. None is implemented or rendered by the current Screen HMI.
+
 **C9 owns the Stacks/sBTC data, while C1–C8 can consume C9 observables for cross-family contextual analysis.**
 
 - [C9 Stacks Technical Specification](docs/c9/stacks/C9_STACKS_TECHNICAL_SPEC.md)
