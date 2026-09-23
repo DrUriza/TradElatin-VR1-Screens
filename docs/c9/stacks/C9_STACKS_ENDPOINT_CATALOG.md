@@ -77,7 +77,40 @@ No exact provider path, method, or payload is frozen here. Concrete endpoint
 selection, adapter implementation, normalization, and contract schemas belong
 to the proposed grant milestones.
 
-## 3. Proposed transversal source surface
+## 3. Canonical logical source surfaces
+
+The following 14 logical source surfaces are shared with Processing, Emulator,
+and Integration. They are identifiers for pre-implementation planning only.
+No logical source ID in this table is an active endpoint. No Stacks HTTP route
+is frozen, no C9 runtime exists, and no C9 HMI exists. The real interfaces,
+provider paths, methods, payloads, and availability will be validated during
+Milestone 1.
+
+### C9 CORE / NATIVE
+
+| Logical source ID | Purpose | C9 observable ownership | Possible consuming C1-C8 families | Semantic restriction | Status |
+| --- | --- | --- | --- | --- | --- |
+| `sbtc_token_supply` | Provide the source surface for total supply, supply change, net issuance, and technically supported reconciliation context | C9.1 | Not frozen; C9-owned | Direct and derived values must remain distinguishable and source-supported | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_deposits` | Represent BTC→sBTC deposit operations, amounts, counts, and supported lifecycle context | C9.2; operational context for C9.3 when applicable | Not frozen; C9-owned | Deposit direction and lifecycle states must preserve validated bridge semantics | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_withdrawals` | Represent sBTC→BTC withdrawal operations, amounts, counts, and supported lifecycle context | C9.2; operational context for C9.3 when applicable | Not frozen; C9-owned | Withdrawal direction, fulfillment, and lifecycle states must preserve validated bridge semantics | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_limits` | Represent withdrawal capacity, limits, or related bridge constraints where exposed by validated sources | C9.3 | Not frozen; C9-owned | Limits must be reported with source, unit, scope, and observation time | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_bridge_chainstate` | Provide chain-state and bridge operational context needed to interpret operation status and settlement | C9.3 | Not frozen; C9-owned | Chain observations must not be converted by Screen into predictions or inferred finality | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_signer_state` | Represent source-supported signer or registry operational state relevant to bridge operation | C9.3 | Not frozen; C9-owned | Must expose only validated public state and preserve provenance; no unsupported signer-health inference | PROPOSED / NOT IMPLEMENTED |
+
+### C9 TRANSVERSAL
+
+| Logical source ID | Purpose | C9 observable ownership | Possible consuming C1-C8 families | Semantic restriction | Status |
+| --- | --- | --- | --- | --- | --- |
+| `sbtc_ft_transfers` | Represent normalized sBTC fungible-token transfer activity for flow and on-chain context | C9 transversal source surface | C2, C5 | Transfers are not CVD; buyer/seller/aggressor semantics require validated market evidence | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_holder_distribution` | Represent source-supported holder counts, balances, or concentration distributions | C9 transversal source surface | C5 | Holder metrics must retain address/entity limitations and must not imply verified beneficial ownership | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_dex_trades` | Represent validated sBTC DEX executions for price, signed-flow, and liquidity context | C9 transversal source surface | C1, C2, C8 | CVD or aggressor labels may be used only when trade direction semantics can be established correctly | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_amm_pool_state` | Represent sBTC AMM pool reserves, state, swaps, slippage, and price-impact context | C9 transversal source surface | C1, C8 | AMM liquidity must not be presented as order-book depth | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_lending_market_state` | Represent validated lending, borrowing, utilization, and rate context for sBTC markets | C9 transversal source surface | C3, C6 | Lending metrics must not be labeled Open Interest or Funding | PROPOSED / NOT IMPLEMENTED |
+| `sbtc_protocol_liquidations` | Represent protocol-specific Stacks DeFi/lending liquidation events after source validation | C9 transversal source surface | C6, C7 | Protocol liquidations must remain distinct from derivatives liquidations | PROPOSED / NOT IMPLEMENTED |
+| `stacks_fee_state` | Represent Stacks fee conditions relevant to bridge and network operational context | C9 transversal source surface | C6 | Fees require explicit units, time basis, source, and must not be mislabeled as market volatility | PROPOSED / NOT IMPLEMENTED |
+| `stacks_mempool_activity` | Represent source-supported pending transaction and congestion context | C9 transversal source surface | C6 | Mempool activity is operational context, not confirmed activity or a prediction | PROPOSED / NOT IMPLEMENTED |
+
+## 4. Proposed transversal source surface
 
 The following surface is explicitly separate from the committed C9 observable
 groups. It documents future extensibility and possible C1-C8 contextual use;
@@ -94,12 +127,16 @@ it does not add functionality or change existing family semantics.
 | C7 Liquidations | Future Stacks DeFi/lending liquidations after protocol and source validation | Keep distinct from derivatives liquidations |
 | C8 Liquidity Microstructure | DEX/AMM pool state, reserves, swaps, slippage, and price impact | AMM liquidity must not be presented as order-book depth |
 
-## 4. Non-operational declaration
+## 5. Non-operational declaration
 
 - C9 is Planned / In Development.
 - No Stacks adapter exists today.
 - No operational Stacks data pipeline exists today.
+- No logical source ID listed above is an active endpoint.
+- No Stacks HTTP route is frozen.
+- No C9 runtime exists today.
 - No Stacks C9 HMI exists today.
+- Real source interfaces will be validated during Milestone 1.
 - Adapter, normalization, versioned contracts, and HMI are proposed grant deliverables.
 - The current Screen repository represents C1-C8.
 - C1-C8 are implemented and validated primarily through emulator, synthetic-data, and replay workflows.
