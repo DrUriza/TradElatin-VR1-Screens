@@ -374,7 +374,7 @@ def serve_layout() -> html.Div:
                     html.Div(
                         [
                             _language_switch(),
-                            html.Span('SYNTHETIC', id='source-effective-badge', className='status-badge status-warning source-effective-badge'),
+                            html.Span('DEMO', id='source-effective-badge', className='status-badge status-warning source-effective-badge'),
                         ],
                         className='topbar-status language-topbar-group',
                         style={'flex': '0 0 auto'},
@@ -405,7 +405,7 @@ def serve_layout() -> html.Div:
                             html.Div(
                                 className='compact-family-controls',
                                 children=[
-                                    selector_buttons('SOURCE','source-mode-selector',options=[{'label':'SYNTHETIC','value':'synthetic'},{'label':'LIVE','value':'live'}],value=desired_source),
+                                    selector_buttons('SOURCE','source-mode-selector',options=[{'label':'DEMO','value':'synthetic'},{'label':'LIVE','value':'live'}],value=desired_source),
                                     selector_buttons('MARKET', 'market-selector'),
                                     selector_buttons('TIMEFRAME', 'timeframe-selector'),
                                     selector_buttons('TIMEFRAME', 'range-selector'),
@@ -458,14 +458,14 @@ app.layout = serve_layout()
 
 @app.callback(Output('source-mode-selector','options'), Input('url','search'))
 def localize_source_options(search):
-    locale=locale_from_search(search); return [{'label':tr('SYNTHETIC',locale),'value':'synthetic'},{'label':tr('LIVE',locale),'value':'live'}]
+    locale=locale_from_search(search); return [{'label':tr('DEMO',locale),'value':'synthetic'},{'label':tr('LIVE',locale),'value':'live'}]
 
 @app.callback(Output('source-effective-badge','children'),Output('source-effective-badge','className'),Output('source-effective-badge','title'),Input('source-status-poll','n_intervals'),Input('source-mode-selector','value'))
 def sync_source_status(_ticks,_selected):
-    status=aggregate_source_status(); effective=str(status['effective_mode']); labels={'live':'LIVE','hybrid':'HYBRID','synthetic':'SYNTHETIC','synthetic_fallback':'SYNTHETIC FALLBACK','validating':'VALIDATING'}
+    status=aggregate_source_status(); effective=str(status['effective_mode']); labels={'live':'LIVE','hybrid':'HYBRID','synthetic':'DEMO','synthetic_fallback':'DEMO FALLBACK','validating':'VALIDATING'}
     level='ok' if effective=='live' else ('warning' if effective in {'hybrid','synthetic','validating'} else 'danger')
     providers=', '.join(f"{name.upper()}: {state.replace('_',' ')}" for name,state in status['providers'].items())
-    detail=f"Requested: {status['requested_mode'].upper()} · Effective: {labels.get(effective,effective.upper())} · Families: {status['completed_families']}/{status['total_families']} · {providers}"
+    detail=f"Requested: {'DEMO' if status['requested_mode'] == 'synthetic' else status['requested_mode'].upper()} · Effective: {labels.get(effective,effective.upper())} · Families: {status['completed_families']}/{status['total_families']} · {providers}"
     if status['reasons']: detail += ' · Fallback: ' + ' | '.join(status['reasons'][:4])
     return labels.get(effective,effective.upper()),f'status-badge status-{level} source-effective-badge',detail
 
@@ -676,7 +676,7 @@ def sync_controls(
         range_options,
         range_value,
         shown if range_options else hidden,
-        f'{_module_contract_label(module)} · {revision}',
+        '',
     )
 
 
