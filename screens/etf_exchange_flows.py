@@ -811,7 +811,7 @@ def _indicator_figure(
         fig.update_yaxes(visible=False)
     else:
         x = [_dt(value) for value in timestamps]
-        for name, values in series.items():
+        for name, values in list(series.items())[:2]:
             fig.add_trace(
                 go.Scatter(
                     x=x,
