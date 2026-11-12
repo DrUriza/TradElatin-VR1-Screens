@@ -779,7 +779,7 @@ def _native_line_figure(
 ) -> go.Figure:
     fig = go.Figure()
     x = [_dt(row.get("timestamp")) for row in records]
-    for field, label, color in series_spec:
+    for field, label, color in series_spec[:2]:
         y = [row.get(field) for row in records]
         fig.add_trace(
             go.Scatter(
