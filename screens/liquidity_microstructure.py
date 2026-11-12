@@ -779,7 +779,7 @@ def _native_line_figure(
 ) -> go.Figure:
     fig = go.Figure()
     x = [_dt(row.get("timestamp")) for row in records]
-    for field, label, color in series_spec[:2]:
+    for field, label, color in series_spec:
         y = [row.get(field) for row in records]
         fig.add_trace(
             go.Scatter(
@@ -1007,15 +1007,17 @@ def _analysis_view(contract: dict[str, Any]) -> html.Div:
         ],
         zero_line=True,
     )
-    for figure, hidden_names in (
-        (depth, {"BID/ASK RATIO"}),
-        (stress, {"SPREAD BPS"}),
-        (walls, {"UPSIDE VACUUM", "DOWNSIDE VACUUM"}),
-        (whale, {"CANCEL Z"}),
-        (absorption, {"SELL ABSORPTION"}),
+    # Keep secondary metrics accessible via legend without crowding the chart.
+    for figure, visible_names in (
+        (depth, {"IMBALANCE", "Z-SCORE"}),
+        (stress, {"IMPACT 1 BTC", "STRESS SCORE"}),
+        (walls, {"BID WALL", "ASK WALL"}),
+        (whale, {"PERSISTENCE", "CANCELLATION"}),
+        (absorption, {"BUY ABSORPTION", "SELL ABSORPTION"}),
+        (regime, {"LIQUIDITY HMI", "WASSERSTEIN"}),
     ):
         for trace in figure.data:
-            if trace.name in hidden_names:
+            if trace.name not in visible_names:
                 trace.visible = "legendonly"
 
     grid = html.Div(
