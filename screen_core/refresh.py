@@ -10,14 +10,18 @@ from pathlib import Path
 from uuid import uuid4
 from .source_control import FAMILIES, write_source_control
 
-# HMI contract-watch cadence.  Processing still owns the market-data cadence
-# (Prices=5 s, Liquidity=5 s, CVD=15 s). Prices and Liquidity are watched every
-# second so a contract written just after a UI tick is displayed promptly;
-# app.py only repaints when the contract revision actually changes.
+# Observe newly published contracts for every family, without requesting
+# or fabricating new market data. Processing controls each producer's cadence.
+# Screen only repaints after the on-disk JSON revision changes.
 FAMILY_AUTO_REFRESH_MS: dict[str, int] = {
     "prices": 1_000,
     "liquidity": 1_000,
     "cvd": 15_000,
+    "open_interest": 15_000,
+    "etf": 30_000,
+    "on_chain": 30_000,
+    "volatility": 15_000,
+    "liquidations": 15_000,
 }
 
 DEFAULT_REFRESH_TIMEOUT_S = 120.0
