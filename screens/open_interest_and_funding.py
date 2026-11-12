@@ -2437,7 +2437,7 @@ def _analysis_figure(
         else go.Figure()
     )
 
-    for index, (series_name, values) in enumerate(series.items()):
+    for index, (series_name, values) in enumerate(list(series.items())[:2]):
         size = min(len(x), len(values))
         if size <= 0:
             continue

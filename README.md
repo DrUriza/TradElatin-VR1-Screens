@@ -20,17 +20,22 @@ source status are determined by Processing and only rendered by Screen.
 - `TRADELATIN_HOST`: default `127.0.0.1`.
 - `TRADELATIN_PORT`: default `8002`.
 
-Automatic UI reread policy:
+Automatic contract-watch policy (Screen rereads only when Processing publishes a changed JSON revision):
 
-- Prices: 5 s
-- Liquidity: 5 s
-- CVD: 15 s
+- Prices: 1 s polling (producer nominal cadence: 5 s)
+- Liquidity: 1 s polling (producer nominal cadence: 5 s)
+- CVD: 15 s polling
+- Open Interest: 15 s polling
+- ETF / Exchange: 30 s polling
+- On-Chain / Miners: 30 s polling
+- Volatility: 15 s polling
+- Liquidations: 15 s polling
 
 CVD timeframes: `5m`, `15m`, `4h` only. Screen rejects stale CVD contracts outside this set.
 
-OI, ETF, On-Chain, Volatility and Liquidations use the manual Reload button.
+All families retain manual Reload; automatic contract watching never fabricates source data or requests a refresh from Processing.
 
-The header source control exposes desired `LIVE` and `SYNTHETIC` modes. Its
+The header source control exposes desired `LIVE` and `DEMO` modes (the persisted Processing wire value remains `synthetic`). Its
 separate badge reports the actual `LIVE`, `HYBRID`, `SYNTHETIC FALLBACK` or
 `VALIDATING` state and provider details. Screen never contacts providers; it
 publishes the selection and renders Processing status.

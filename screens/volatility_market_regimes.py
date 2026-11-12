@@ -180,7 +180,19 @@ def _analysis_figure(block: dict[str, Any], indicator_id: str, range_id: str | N
     timestamps=timestamps[-n:]
     fig=go.Figure(); x=[_dt(t) for t in timestamps]
     colors=[BLUE,CYAN,PURPLE,ORANGE,GREEN,RED]
-    for idx,(name,values) in enumerate(series.items()):
+    # Prefer the principal signal and its companion rather than JSON key order.
+    preferred = {
+        "volatility_zscore_percentile": ("rv_zscore", "rv_percentile"),
+        "volatility_risk_premium": ("volatility_risk_premium", "vrp_zscore"),
+        "term_structure_slope": ("term_slope", "term_curvature"),
+        "volatility_skew_tail_risk": ("skew_25d", "downside_iv"),
+        "vol_of_vol_acceleration": ("vol_of_vol", "rv_acceleration"),
+        "regime_shift_wasserstein": ("wasserstein_distance", "transition_probability"),
+    }.get(indicator_id, ())
+    chosen = [name for name in preferred if name in series]
+    chosen.extend(name for name in series if name not in chosen)
+    for idx,name in enumerate(chosen[:2]):
+        values = series[name]
         vals=_safe_list(values)[-n:]
         if indicator_id == "volatility_zscore_percentile" and name == "rv_percentile":
             fig.add_trace(go.Scatter(x=x,y=vals,name="PERCENTILE",mode="lines",line={"width":1.15,"color":PURPLE},yaxis="y2"))
