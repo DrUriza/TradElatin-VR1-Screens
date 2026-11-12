@@ -916,6 +916,7 @@ def _render_screen_cached(
     Input('market-selector', 'value'),
     Input('timeframe-selector', 'value'),
     Input('range-selector', 'value'),
+    Input('reload-json', 'n_clicks'),
 )
 def render_screen(
     pathname: str | None,
@@ -923,6 +924,7 @@ def render_screen(
     market: str | None,
     timeframe: str | None,
     range_id: str | None,
+    _reload_clicks: int | None = None,
 ) -> html.Div:
     locale = locale_from_search(search)
     _trace_i18n("render", locale=locale, pathname=pathname, search=search)
