@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import time
 from functools import lru_cache
 from types import ModuleType
@@ -216,9 +217,10 @@ def _header_badges(contract: dict[str, Any]) -> list[Any]:
     nodes: list[Any] = [
         html.Span(item['text'], className=f"status-badge status-{_header_status(item.get('status'))}")
         for item in active_badges(contract)
+        if not re.search(r'(?i)\bv(?:ersion)?\s*\d+(?:[._-]\d+)*\b', str(item['text']))
     ]
     if meta.get('data_mode'):
-        nodes.append(html.Span(str(meta['data_mode']).upper(), className='status-badge status-warning'))
+        nodes.append(html.Span('DEMO' if str(meta['data_mode']).lower() in {'synthetic', 'synthetic_fallback'} else str(meta['data_mode']).upper(), className='status-badge status-warning'))
     nodes.append(
         html.Span(
             str(quality_status).upper(),
