@@ -180,7 +180,7 @@ def _analysis_figure(block: dict[str, Any], indicator_id: str, range_id: str | N
     timestamps=timestamps[-n:]
     fig=go.Figure(); x=[_dt(t) for t in timestamps]
     colors=[BLUE,CYAN,PURPLE,ORANGE,GREEN,RED]
-    for idx,(name,values) in enumerate(series.items()):
+    for idx,(name,values) in enumerate(list(series.items())[:2]):
         vals=_safe_list(values)[-n:]
         if indicator_id == "volatility_zscore_percentile" and name == "rv_percentile":
             fig.add_trace(go.Scatter(x=x,y=vals,name="PERCENTILE",mode="lines",line={"width":1.15,"color":PURPLE},yaxis="y2"))
