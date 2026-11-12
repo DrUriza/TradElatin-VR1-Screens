@@ -354,7 +354,7 @@ def _native_indicator_figure(contract: dict[str, Any], indicator_id: str, range_
     secondary = {
         "miner_reserve_change_zscore": {"Reserve ROC 30D"},
         "miner_selling_pressure": {"M2E Z"},
-        "hashrate_momentum_hash_ribbon": {"Hashrate Eh S", "Hash Ma 60"},
+        "hashrate_momentum_hash_ribbon": set(),
         "hashrate_difficulty_stress": {"Difficulty Change Zscore"},
         "miner_capitulation_recovery_regime": {"Capitulation %", "Recovery %"},
     }.get(indicator_id, set())
