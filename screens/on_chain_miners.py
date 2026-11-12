@@ -310,19 +310,19 @@ def _native_indicator_figure(contract: dict[str, Any], indicator_id: str, range_
                 colors = [neutral if value is None else (GREEN if value >= 0 else RED) for value in vals]
                 fig.add_trace(go.Bar(x=x, y=vals, name="RESERVE CHANGE BTC", marker_color=colors, opacity=.58))
             _add_line(fig, x, _safe_list(series.get("reserve_change_zscore")), "reserve_change_zscore", secondary=True, width=1.6)
-            _add_line(fig, x, _safe_list(series.get("reserve_roc_30d_pct")), "reserve_roc_30d_pct", secondary=True, dash="dot")
+            # Keep the secondary ROC in the summary; two traces are enough here.
         elif indicator_id == "hashrate_momentum_hash_ribbon":
-            _add_line(fig, x, _safe_list(series.get("hashrate_eh_s")), "hashrate_eh_s", width=1.0)
+            # Hashrate remains available in Processing and the metric summary.
             _add_line(fig, x, _safe_list(series.get("hash_ma_30")), "hash_ma_30", width=1.45)
             _add_line(fig, x, _safe_list(series.get("hash_ma_60")), "hash_ma_60", width=1.45)
-            _add_line(fig, x, _safe_list(series.get("hash_momentum_pct")), "hash_momentum_pct", secondary=True, dash="dot")
+            # Momentum stays in the metric summary; retain the two ribbon averages.
         elif indicator_id == "miner_capitulation_recovery_regime":
             _add_line(fig, x, _safe_list(series.get("regime_score")), "regime_score", width=1.7)
             _add_line(fig, x, _safe_list(series.get("wasserstein_distance")), "wasserstein_distance", dash="dot")
-            _add_line(fig, x, _safe_list(series.get("capitulation_probability_pct")), "capitulation_probability_pct", secondary=True)
-            _add_line(fig, x, _safe_list(series.get("recovery_score_pct")), "recovery_score_pct", secondary=True)
+            # Probabilities remain in the detailed summary.
+            # Recovery remains in the detailed summary.
         else:
-            for name, values in series.items():
+            for name, values in list(series.items())[:2]:
                 if isinstance(values, list):
                     _add_line(fig, x, values, str(name))
 
